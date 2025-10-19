@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "src\CryptoCore", "src\CryptoCore\CryptoCore.csproj", "{C4A3A75E-C2B4-49B0-8379-B7B6BF6A6801}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{6FE12434-2DFD-4C88-8003-B253DF8470B3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "tests\CryptoCore.Tests", "tests\CryptoCore.Tests\CryptoCore.Tests.csproj", "{FF4641C1-FECD-4058-B91F-D4F726AF9291}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{FB97142F-89B1-4651-9B76-5DB408FDFCFB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CryptoCore.Json", "src\CryptoCore.Json\CryptoCore.Json.csproj", "{E2A54EDE-B275-41FC-A02A-06C172DD366C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C4A3A75E-C2B4-49B0-8379-B7B6BF6A6801}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C4A3A75E-C2B4-49B0-8379-B7B6BF6A6801}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C4A3A75E-C2B4-49B0-8379-B7B6BF6A6801}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C4A3A75E-C2B4-49B0-8379-B7B6BF6A6801}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FF4641C1-FECD-4058-B91F-D4F726AF9291}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FF4641C1-FECD-4058-B91F-D4F726AF9291}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FF4641C1-FECD-4058-B91F-D4F726AF9291}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FF4641C1-FECD-4058-B91F-D4F726AF9291}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E2A54EDE-B275-41FC-A02A-06C172DD366C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E2A54EDE-B275-41FC-A02A-06C172DD366C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E2A54EDE-B275-41FC-A02A-06C172DD366C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E2A54EDE-B275-41FC-A02A-06C172DD366C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{FF4641C1-FECD-4058-B91F-D4F726AF9291} = {6FE12434-2DFD-4C88-8003-B253DF8470B3}
+		{C4A3A75E-C2B4-49B0-8379-B7B6BF6A6801} = {FB97142F-89B1-4651-9B76-5DB408FDFCFB}
+		{E2A54EDE-B275-41FC-A02A-06C172DD366C} = {FB97142F-89B1-4651-9B76-5DB408FDFCFB}
+	EndGlobalSection
+EndGlobal
