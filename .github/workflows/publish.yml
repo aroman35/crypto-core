@@ -112,7 +112,6 @@ jobs:
             echo "ERROR: Failed to obtain IAM token." >&2
             exit 1
           fi
-          # не печатаем токен!
           echo "IAM_TOKEN=$IAM_TOKEN" >> $GITHUB_ENV
           echo "token-length=${#IAM_TOKEN}"
 
@@ -147,8 +146,8 @@ jobs:
         env:
           IAM_TOKEN: ${{ env.IAM_TOKEN }}
         run: |
-          dotnet nuget push "./artifacts/*.nupkg" -s yc-reg --api-key "$IAM_TOKEN" --skip-duplicate --verbosity detailed
-          dotnet nuget push "./artifacts/*.snupkg" -s yc-reg --api-key "$IAM_TOKEN" --skip-duplicate --verbosity detailed || true
+          dotnet nuget push "./artifacts/*.nupkg" -s yc-reg --api-key "$IAM_TOKEN" --skip-duplicate
+          dotnet nuget push "./artifacts/*.snupkg" -s yc-reg --api-key "$IAM_TOKEN" --skip-duplicate || true
 
       - name: Upload packages (artifact)
         uses: actions/upload-artifact@v4
