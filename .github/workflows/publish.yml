@@ -14,9 +14,14 @@ on:
 jobs:
   pack-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
     env:
       DOTNET_NOLOGO: true
       DOTNET_CLI_TELEMETRY_OPTOUT: true
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,11 +48,33 @@ jobs:
           echo "PKG_VERSION=$VERSION" | tee -a $GITHUB_ENV
           echo "Using version: $VERSION"
 
-      - name: Restore, Build & Test
+      - name: Restore & Build
         shell: bash
         run: |
-          dotnet build -c Release
-          dotnet test -c Release --no-build
+          dotnet restore
+          dotnet build -c Release --no-restore
+
+      - name: Test (produce TRX for UI)
+        shell: bash
+        run: |
+          mkdir -p TestResults
+          dotnet test -c Release --no-build \
+            --logger "trx;LogFileName=test_results.trx" \
+            --results-directory ./TestResults
+
+      - name: Publish Test Results to GitHub UI
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: |
+            TestResults/**/*.trx
+
+      - name: Upload raw TestResults (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
 
       - name: Pack CryptoCore & CryptoCore.Json
         shell: bash
@@ -85,7 +112,8 @@ jobs:
             echo "ERROR: Failed to obtain IAM token." >&2
             exit 1
           fi
-          echo "IAM_TOKEN=$IAM_TOKEN" | tee -a $GITHUB_ENV
+          # не печатаем токен!
+          echo "IAM_TOKEN=$IAM_TOKEN" >> $GITHUB_ENV
           echo "token-length=${#IAM_TOKEN}"
 
       - name: Add YC NuGet source
@@ -103,15 +131,26 @@ jobs:
             --store-password-in-clear-text \
             --protocol-version 3
 
+      - name: Verify registry access bindings (diagnostics)
+        shell: bash
+        env:
+          REG_ID: ${{ secrets.YC_REGISTRY_ID }}
+        run: |
+          echo "Checking access bindings for registry: $REG_ID"
+          yc cloud-registry registry list-access-bindings "$REG_ID" || {
+            echo "Failed to read access bindings. The service account may not have viewer/list permissions on registry." >&2
+            exit 1
+          }
+
       - name: Push packages to Yandex Cloud Registry
         shell: bash
         env:
           IAM_TOKEN: ${{ env.IAM_TOKEN }}
         run: |
-          dotnet nuget push "./artifacts/*.nupkg" -s yc-reg --api-key "$IAM_TOKEN" --skip-duplicate
-          dotnet nuget push "./artifacts/*.snupkg" -s yc-reg --api-key "$IAM_TOKEN" --skip-duplicate || true
+          dotnet nuget push "./artifacts/*.nupkg" -s yc-reg --api-key "$IAM_TOKEN" --skip-duplicate --verbosity detailed
+          dotnet nuget push "./artifacts/*.snupkg" -s yc-reg --api-key "$IAM_TOKEN" --skip-duplicate --verbosity detailed || true
 
-      - name: Upload artifacts (optional)
+      - name: Upload packages (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: nuget-packages-${{ env.PKG_VERSION }}
