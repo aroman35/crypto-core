@@ -58,12 +58,15 @@ jobs:
 
       - name: Prepare YC service account key
         shell: bash
+        env:
+          SA_KEY_JSON: ${{ secrets.YC_SA_KEY_JSON }}
         run: |
-          if [[ -z "${{ secrets.YC_SA_KEY_JSON }}" ]]; then
+          if [ -z "$SA_KEY_JSON" ]; then
             echo "ERROR: Secret YC_SA_KEY_JSON is not set." >&2
             exit 1
           fi
-          printf "%s" "${{ secrets.YC_SA_KEY_JSON }}" > key.json
+          printf '%s' "$SA_KEY_JSON" > key.json
+          head -n 1 key.json >/dev/null
 
       - name: Install Yandex Cloud CLI
         shell: bash
