@@ -1,4 +1,4 @@
-﻿using CryptoCore.Root;
+﻿using CryptoCore.Primitives;
 using Shouldly;
 
 namespace CryptoCore.Tests.Root
@@ -25,7 +25,7 @@ namespace CryptoCore.Tests.Root
         public void Parse_Rejects_InvalidLengths()
         {
             Should.Throw<FormatException>(() => Asset.Parse(""));
-            Should.Throw<FormatException>(() => Asset.Parse(new string('A', Asset.MAX_LENGTH + 1)));
+            Should.Throw<FormatException>(() => Asset.Parse(new string('A', Asset.MaxLength + 1)));
         }
 
         [Fact(DisplayName = "TryParse: rejects non-ASCII characters")]

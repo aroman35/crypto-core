@@ -1,6 +1,6 @@
-﻿using System.Text.Json;
+﻿namespace CryptoCore.Serialization.SystemTextJson;
 
-namespace CryptoCore.Json.SystemTextJson;
+using System.Text.Json;
 
 /// <summary>
 /// Helper extensions to register CryptoCore converters with <see cref="JsonSerializerOptions"/>.

@@ -1,8 +1,8 @@
 ﻿using System.Text.Json;
 using CryptoCore.Extensions;
-using CryptoCore.Json.Newtonsoft;
-using CryptoCore.Json.SystemTextJson;
-using CryptoCore.Root;
+using CryptoCore.Serialization.Newtonsoft;
+using CryptoCore.Serialization.SystemTextJson;
+using CryptoCore.Primitives;
 using Newtonsoft.Json;
 using Shouldly;
 

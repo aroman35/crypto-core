@@ -2,7 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace CryptoCore.Root;
+namespace CryptoCore.Primitives;
 
 /// <summary>
 /// Compact, fixed-size ASCII asset identifier.
@@ -16,7 +16,7 @@ public unsafe struct Asset : IEquatable<Asset>, IEquatable<string>, IComparable<
     /// <summary>
     /// Maximum allowed length of an asset identifier, in characters.
     /// </summary>
-    public const int MAX_LENGTH = 11;
+    public const int MaxLength = 11;
 
     private fixed byte _bytes[12]; // ASCII storage (upper-case)
     private byte _len; // 0..11
@@ -99,7 +99,7 @@ public unsafe struct Asset : IEquatable<Asset>, IEquatable<string>, IComparable<
     /// </summary>
     public static bool TryParse(ReadOnlySpan<char> chars, out Asset asset)
     {
-        if (chars.Length == 0 || chars.Length > MAX_LENGTH)
+        if (chars.Length == 0 || chars.Length > MaxLength)
         {
             asset = default;
             return false;
@@ -149,7 +149,7 @@ public unsafe struct Asset : IEquatable<Asset>, IEquatable<string>, IComparable<
     /// </summary>
     public static bool TryFromAscii(ReadOnlySpan<byte> ascii, out Asset asset)
     {
-        if (ascii.Length == 0 || ascii.Length > MAX_LENGTH)
+        if (ascii.Length == 0 || ascii.Length > MaxLength)
         {
             asset = default;
             return false;
@@ -269,4 +269,16 @@ public unsafe struct Asset : IEquatable<Asset>, IEquatable<string>, IComparable<
         => (b >= (byte)'A' && b <= (byte)'Z')
            || (b >= (byte)'0' && b <= (byte)'9')
            || b is (byte)'_' or (byte)'-' or (byte)'.' or (byte)'/';
+
+    /// <summary>Returns <c>true</c> if <paramref name="left"/> is less than <paramref name="right"/>.</summary>
+    public static bool operator <(Asset left, Asset right) => left.CompareTo(right) < 0;
+
+    /// <summary>Returns <c>true</c> if <paramref name="left"/> is greater than <paramref name="right"/>.</summary>
+    public static bool operator >(Asset left, Asset right) => left.CompareTo(right) > 0;
+
+    /// <summary>Returns <c>true</c> if <paramref name="left"/> is less than or equal to <paramref name="right"/>.</summary>
+    public static bool operator <=(Asset left, Asset right) => left.CompareTo(right) <= 0;
+
+    /// <summary>Returns <c>true</c> if <paramref name="left"/> is greater than or equal to <paramref name="right"/>.</summary>
+    public static bool operator >=(Asset left, Asset right) => left.CompareTo(right) >= 0;
 }

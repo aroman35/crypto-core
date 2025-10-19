@@ -1,7 +1,7 @@
-﻿using CryptoCore.Root;
+﻿using CryptoCore.Primitives;
 using Newtonsoft.Json;
 
-namespace CryptoCore.Json.Newtonsoft;
+namespace CryptoCore.Serialization.Newtonsoft;
 
 /// <summary>
 /// Newtonsoft.Json converter for <see cref="Symbol"/> that serializes to a single string

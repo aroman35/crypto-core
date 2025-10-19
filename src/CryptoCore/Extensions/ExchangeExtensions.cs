@@ -1,4 +1,4 @@
-﻿using CryptoCore.Root;
+﻿using CryptoCore.Primitives;
 
 namespace CryptoCore.Extensions;
 

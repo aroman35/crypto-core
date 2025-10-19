@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Reflection;
 using CryptoCore.Extensions;
-using CryptoCore.Root;
+using CryptoCore.Primitives;
 using Shouldly;
 
 namespace CryptoCore.Tests.Root;

@@ -76,12 +76,17 @@ jobs:
           name: test-results
           path: TestResults
 
-      - name: Pack CryptoCore & CryptoCore.Json
-        shell: bash
-        run: |
-          dotnet pack ./src/CryptoCore/CryptoCore.csproj -c Release -o ./artifacts -p:Version="$PKG_VERSION" --no-build
-          dotnet pack ./src/CryptoCore.Json/CryptoCore.Json.csproj -c Release -o ./artifacts -p:Version="$PKG_VERSION" --no-build
-          ls -la ./artifacts
+      - name: Pack CryptoStreaming.CryptoCore
+        run: dotnet pack ./src/CryptoCore/CryptoCore.csproj -c Release -o ./artifacts -p:Version="$PKG_VERSION" --no-build
+
+      - name: Pack CryptoStreaming.Abstractions
+        run: dotnet pack ./src/CryptoStreaming.Abstractions/CryptoStreaming.Abstractions.csproj -c Release -o ./artifacts -p:Version="$PKG_VERSION" --no-build
+
+      - name: Pack CryptoStreaming.Channels
+        run: dotnet pack ./src/CryptoStreaming.Channels/CryptoStreaming.Channels.csproj -c Release -o ./artifacts -p:Version="$PKG_VERSION" --no-build
+
+      - name: Pack CryptoConnector.Binance
+        run: dotnet pack ./src/CryptoConnector.Binance/CryptoConnector.Binance.csproj -c Release -o ./artifacts -p:Version="$PKG_VERSION" --no-build
 
       - name: Prepare YC service account key
         shell: bash

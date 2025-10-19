@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 
-namespace CryptoCore.Root;
+namespace CryptoCore.Primitives;
 
 /// <summary>
 /// A bit flags enumeration that encodes market type, contract attributes,

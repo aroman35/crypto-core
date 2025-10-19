@@ -1,8 +1,8 @@
-﻿using System.Text.Json;
-using System.Text.Json.Serialization;
-using CryptoCore.Root;
+﻿namespace CryptoCore.Serialization.SystemTextJson;
 
-namespace CryptoCore.Json.SystemTextJson;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using CryptoCore.Primitives;
 
 /// <summary>
 /// System.Text.Json converter for <see cref="Asset"/> that serializes to a single string

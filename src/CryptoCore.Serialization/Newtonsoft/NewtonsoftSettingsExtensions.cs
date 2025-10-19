@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace CryptoCore.Json.Newtonsoft;
+namespace CryptoCore.Serialization.Newtonsoft;
 
 /// <summary>
 /// Helper extensions to register CryptoCore converters with <see cref="JsonSerializerSettings"/>.

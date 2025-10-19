@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using CryptoCore.Extensions;
 
-namespace CryptoCore.Root;
+namespace CryptoCore.Primitives;
 
 /// <summary>
 /// Trading symbol: <see cref="BaseAsset"/> + <see cref="QuoteAsset"/> + <see cref="Exchange"/>.
@@ -14,7 +14,8 @@ namespace CryptoCore.Root;
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbol>
 {
-    public const int MAX_ASSET_LENGTH = Asset.MAX_LENGTH;
+    /// <summary>Maximum allowed length for base and quote asset (ASCII only).</summary>
+    public const int MaxAssetLength = Asset.MaxLength;
 
     private Asset _base;
     private Asset _quote;
@@ -165,14 +166,18 @@ public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbo
         return 0;
     }
 
+    /// <summary>Determines value equality with another <see cref="Symbol"/> (components and exchange flags).</summary>
     public readonly bool Equals(Symbol other)
         => _exchange == other._exchange && _base.Equals(other._base) && _quote.Equals(other._quote);
 
-    public readonly bool Equals(string? s) =>
-        !string.IsNullOrEmpty(s) && TryParse(s.AsSpan(), out var sym) && Equals(sym);
+    /// <summary>Determines equality with a string by parsing its canonical form.</summary>
+    public readonly bool Equals(string? s)
+        => !string.IsNullOrEmpty(s) && TryParse(s.AsSpan(), out var sym) && Equals(sym);
 
+    /// <summary>Determines equality with an arbitrary object.</summary>
     public override readonly bool Equals(object? obj) => obj is Symbol s && Equals(s);
 
+    /// <summary>Returns a hash code based on components.</summary>
     public override readonly int GetHashCode()
     {
         unchecked
@@ -185,10 +190,29 @@ public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbo
         }
     }
 
+    /// <summary>Equality operator.</summary>
     public static bool operator ==(Symbol left, Symbol right) => left.Equals(right);
+
+    /// <summary>Inequality operator.</summary>
     public static bool operator !=(Symbol left, Symbol right) => !left.Equals(right);
+
+    /// <summary>Equality against a string.</summary>
     public static bool operator ==(Symbol left, string right) => left.Equals(right);
+
+    /// <summary>Inequality against a string.</summary>
     public static bool operator !=(Symbol left, string right) => !left.Equals(right);
+
+    /// <summary>Returns <c>true</c> if <paramref name="left"/> is less than <paramref name="right"/> (lexicographic).</summary>
+    public static bool operator <(Symbol left, Symbol right) => left.CompareTo(right) < 0;
+
+    /// <summary>Returns <c>true</c> if <paramref name="left"/> is greater than <paramref name="right"/>.</summary>
+    public static bool operator >(Symbol left, Symbol right) => left.CompareTo(right) > 0;
+
+    /// <summary>Returns <c>true</c> if <paramref name="left"/> is less than or equal to <paramref name="right"/>.</summary>
+    public static bool operator <=(Symbol left, Symbol right) => left.CompareTo(right) <= 0;
+
+    /// <summary>Returns <c>true</c> if <paramref name="left"/> is greater than or equal to <paramref name="right"/>.</summary>
+    public static bool operator >=(Symbol left, Symbol right) => left.CompareTo(right) >= 0;
 
     // ===================== native formatting =====================
 
@@ -197,8 +221,8 @@ public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbo
     /// </summary>
     private readonly bool MeasureNative(out int length)
     {
-        int bl = _base.AsciiBytes.Length;
-        int ql = _quote.AsciiBytes.Length;
+        var bl = _base.AsciiBytes.Length;
+        var ql = _quote.AsciiBytes.Length;
         if (bl <= 0 || ql <= 0)
         {
             length = 0;
@@ -247,21 +271,21 @@ public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbo
     /// </summary>
     private readonly string FormatNative()
     {
-        if (!MeasureNative(out int len))
+        if (!MeasureNative(out var len))
             return string.Empty;
 
         // Pass the whole struct as state (no single-element tuples)
         return string.Create(len, this, static (dst, self) =>
         {
-            int pos = 0;
+            var pos = 0;
 
             // BASE
             var b = self._base.AsciiBytes;
-            for (int i = 0; i < b.Length; i++)
+            for (var i = 0; i < b.Length; i++)
                 dst[pos++] = (char)b[i];
 
             // Separator policy
-            bool needSep =
+            var needSep =
                 !TryGetPresetName(self._exchange, out _) // generic
                 || (self._exchange.IsOKX() && (self._exchange.IsSpot() || self._exchange.IsPerpetual() || self._exchange.IsSwap()))
                 || (self._exchange.IsKuCoin() && self._exchange.IsSpot());
@@ -271,7 +295,7 @@ public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbo
 
             // QUOTE
             var q = self._quote.AsciiBytes;
-            for (int i = 0; i < q.Length; i++)
+            for (var i = 0; i < q.Length; i++)
                 dst[pos++] = (char)q[i];
 
             // OKX "-SWAP" suffix
@@ -291,7 +315,7 @@ public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbo
     /// </summary>
     public readonly bool TryFormat(Span<char> destination, out int written)
     {
-        if (!MeasureNative(out int count) || destination.Length < count)
+        if (!MeasureNative(out var count) || destination.Length < count)
         {
             written = 0;
             return false;
@@ -307,14 +331,14 @@ public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbo
     /// </summary>
     private readonly void WriteNative(Span<char> dst)
     {
-        int pos = 0;
+        var pos = 0;
 
         // BASE
         var b = _base.AsciiBytes;
-        for (int i = 0; i < b.Length; i++)
+        for (var i = 0; i < b.Length; i++)
             dst[pos++] = (char)b[i];
 
-        bool needSep =
+        var needSep =
             !TryGetPresetName(_exchange, out _)
             || (_exchange.IsOKX() && (_exchange.IsSpot() || _exchange.IsPerpetual() || _exchange.IsSwap()))
             || (_exchange.IsKuCoin() && _exchange.IsSpot());
@@ -324,7 +348,7 @@ public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbo
 
         // QUOTE
         var q = _quote.AsciiBytes;
-        for (int i = 0; i < q.Length; i++)
+        for (var i = 0; i < q.Length; i++)
             dst[pos++] = (char)q[i];
 
         // OKX "-SWAP" suffix
