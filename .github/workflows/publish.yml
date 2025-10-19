@@ -103,6 +103,14 @@ jobs:
             --store-password-in-clear-text \
             --protocol-version 3
 
+      - name: Set API key for YC NuGet source
+        shell: bash
+        env:
+          IAM_TOKEN: ${{ env.IAM_TOKEN }}
+        run: |
+          # пропишем IAM-токен как API key для источника yc-reg
+          dotnet nuget setapikey "$IAM_TOKEN" -s yc-reg
+
       - name: Push packages to Yandex Cloud Registry
         shell: bash
         run: |
