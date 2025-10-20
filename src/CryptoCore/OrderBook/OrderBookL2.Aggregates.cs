@@ -91,7 +91,7 @@ public sealed partial class OrderBookL2
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Performance",
         "CA1822:Mark members as static",
-        Justification = "统一 signature for partial hook across parts")]
+        Justification = "signature for partial hook across parts")]
     partial void OnLevelUpserted(Side side, double price, double qty)
     {
         // intentionally empty

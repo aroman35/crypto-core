@@ -117,4 +117,92 @@ public class OrderBookL2Tests
         book.BidLevels.ShouldBe(2);
         book.AskLevels.ShouldBe(1);
     }
+
+    [Fact(DisplayName = "OrderBook: Apply snapshot (IsSnapshot=true, IDs=0) then deltas (IsSnapshot=false, IDs set) via Apply()")]
+    public void OrderBook_Snapshot_NoIds_Then_Deltas()
+    {
+        var sym = Symbol.Parse("BTCUSDT").For(Exchange.Binance | Exchange.Spot);
+        var book = new OrderBookL2(sym);
+
+        // Snapshot: IsSnapshot=true, IDs MUST be zero
+        var snap = new L2Update(
+            symbol: sym,
+            eventTimeMs: 0,
+            isSnapshot: true,
+            firstUpdateId: 0ul,
+            prevLastUpdateId: 0ul,
+            lastUpdateId: 0ul,
+            deltas: new []
+            {
+                new L2Delta(Side.Buy, 99.0, 2.0),
+                new L2Delta(Side.Sell, 101.0, 3.0),
+            });
+
+        book.Apply(in snap);
+
+        // Delta: IsSnapshot=false, IDs set (Binance WS-style)
+        var upd = new L2Update(
+            symbol: sym,
+            eventTimeMs: 0,
+            isSnapshot: false,
+            firstUpdateId: 100ul,
+            prevLastUpdateId: 100ul,
+            lastUpdateId: 101ul,
+            deltas: new []
+            {
+                new L2Delta(Side.Buy, 100.0, 1.0),   // upsert bid
+                new L2Delta(Side.Sell, 101.0, 0.0), // delete ask
+                new L2Delta(Side.Sell, 102.0, 1.0), // add ask
+            });
+
+        book.Apply(in upd);
+
+        var (bb, bq) = book.BestBid();
+        var (ba, aq) = book.BestAsk();
+
+        bb.ShouldBe(100.0);
+        bq.ShouldBe(1.0);
+        ba.ShouldBe(102.0);
+        aq.ShouldBe(1.0);
+
+        book.EnumerateBids(5).First().Price.ShouldBe(100.0);
+        book.EnumerateAsks(5).First().Price.ShouldBe(102.0);
+    }
+
+    [Fact(DisplayName = "L2Update: Snapshot binary roundtrip (IsSnapshot=true, IDs=0)")]
+    public void L2Update_Snapshot_Binary_Roundtrip()
+    {
+        var sym = Symbol.Parse("ETHUSDT").For(Exchange.Binance | Exchange.Spot);
+
+        var snap = new L2Update(
+            symbol: sym,
+            eventTimeMs: 123,
+            isSnapshot: true,
+            firstUpdateId: 0ul,
+            prevLastUpdateId: 0ul,
+            lastUpdateId: 0ul,
+            deltas: new []
+            {
+                new L2Delta(Side.Buy, 2000.5, 2.25),
+                new L2Delta(Side.Sell, 2001.0, 1.00),
+            });
+
+        Span<byte> buf = stackalloc byte[2048];
+        snap.TryWrite(buf, out var written).ShouldBeTrue();
+
+        var ok = L2Update.TryRead(buf[..written], out var back);
+        ok.ShouldBeTrue();
+
+        back.Symbol.ShouldBe(sym);
+        back.IsSnapshot.ShouldBeTrue();
+        back.LastUpdateId.ShouldBe(0ul);
+        back.PrevLastUpdateId.ShouldBe(0ul);
+        back.EventTimeMs.ShouldBe(123);
+
+        // Deltas are exposed as ReadOnlyMemory<L2Delta>
+        var deltas = back.Deltas.Span;
+        deltas.Length.ShouldBe(2);
+        deltas[0].Side.ShouldBe(Side.Buy);
+        deltas[1].Side.ShouldBe(Side.Sell);
+    }
 }

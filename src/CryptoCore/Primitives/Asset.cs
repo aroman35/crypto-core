@@ -16,7 +16,7 @@ public unsafe struct Asset : IEquatable<Asset>, IEquatable<string>, IComparable<
     /// <summary>
     /// Maximum allowed length of an asset identifier, in characters.
     /// </summary>
-    public const int MaxLength = 11;
+    public const int MAX_LENGTH = 11;
 
     private fixed byte _bytes[12]; // ASCII storage (upper-case)
     private byte _len; // 0..11
@@ -69,7 +69,7 @@ public unsafe struct Asset : IEquatable<Asset>, IEquatable<string>, IComparable<
     /// <summary>
     /// Converts to string. First call allocates, subsequent calls are served from an internal cache.
     /// </summary>
-    public override readonly string ToString()
+    public readonly override string ToString()
     {
         if (AssetToString.TryGetValue(this, out var s))
             return s;
@@ -99,7 +99,7 @@ public unsafe struct Asset : IEquatable<Asset>, IEquatable<string>, IComparable<
     /// </summary>
     public static bool TryParse(ReadOnlySpan<char> chars, out Asset asset)
     {
-        if (chars.Length == 0 || chars.Length > MaxLength)
+        if (chars.Length == 0 || chars.Length > MAX_LENGTH)
         {
             asset = default;
             return false;
@@ -149,7 +149,7 @@ public unsafe struct Asset : IEquatable<Asset>, IEquatable<string>, IComparable<
     /// </summary>
     public static bool TryFromAscii(ReadOnlySpan<byte> ascii, out Asset asset)
     {
-        if (ascii.Length == 0 || ascii.Length > MaxLength)
+        if (ascii.Length == 0 || ascii.Length > MAX_LENGTH)
         {
             asset = default;
             return false;
@@ -220,10 +220,10 @@ public unsafe struct Asset : IEquatable<Asset>, IEquatable<string>, IComparable<
         => !string.IsNullOrEmpty(s) && TryParse(s.AsSpan(), out var a) && Equals(a);
 
     /// <summary>Object equality.</summary>
-    public override readonly bool Equals(object? obj) => obj is Asset a && Equals(a);
+    public readonly override bool Equals(object? obj) => obj is Asset a && Equals(a);
 
     /// <summary>Stable hash over up to 11 ASCII bytes (FNV-1a).</summary>
-    public override readonly int GetHashCode()
+    public readonly override int GetHashCode()
     {
         const uint prime = 16777619;
         var h = 2166136261;

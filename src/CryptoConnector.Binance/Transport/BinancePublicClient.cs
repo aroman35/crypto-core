@@ -55,6 +55,7 @@ public sealed class BinancePublicClient : IBinancePublicClient
         _ = Task.Run(() => ParseLoop(ct), ct);
     }
 
+    /// <inheritdoc/>
     public async Task StartCombinedAsync(string combinedBaseUrl, string[] streamNames, IMarketDataTransport transport, CancellationToken ct = default)
     {
         _combinedMode = true;

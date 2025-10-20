@@ -2,7 +2,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using CryptoCore.Primitives;
+using Primitives;
 
 /// <summary>
 /// System.Text.Json converter for <see cref="Asset"/> that serializes to a single string
@@ -38,4 +38,23 @@ public sealed class AssetJsonConverter : JsonConverter<Asset>
     /// </summary>
     public override void Write(Utf8JsonWriter writer, Asset value, JsonSerializerOptions options)
         => writer.WriteStringValue(value.ToString());
+
+    /// <inheritdoc />
+    public override Asset ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var name = reader.GetString();
+        if (string.IsNullOrEmpty(name))
+            throw new JsonException("Asset property name is empty.");
+
+        if (!Asset.TryParse(name.AsSpan(), out var a))
+            throw new JsonException($"Invalid asset property name: '{name}'.");
+
+        return a;
+    }
+
+    /// <inheritdoc />
+    public override void WriteAsPropertyName(Utf8JsonWriter writer, Asset value, JsonSerializerOptions options)
+    {
+        writer.WritePropertyName(value.ToString());
+    }
 }

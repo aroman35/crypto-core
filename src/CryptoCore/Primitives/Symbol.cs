@@ -14,9 +14,6 @@ namespace CryptoCore.Primitives;
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbol>
 {
-    /// <summary>Maximum allowed length for base and quote asset (ASCII only).</summary>
-    public const int MaxAssetLength = Asset.MaxLength;
-
     private Asset _base;
     private Asset _quote;
     private Exchange _exchange;
@@ -54,17 +51,17 @@ public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbo
 
     /// <summary>Create from components.</summary>
     public static Symbol Create(Asset baseAsset, Asset quoteAsset, Exchange exchange)
-        => new Symbol { _base = baseAsset, _quote = quoteAsset, _exchange = exchange };
+        => new() { _base = baseAsset, _quote = quoteAsset, _exchange = exchange };
 
     /// <summary>Rebinds exchange preset for the same asset pair.</summary>
     public readonly Symbol For(Exchange exchange) =>
-        new Symbol { _base = _base, _quote = _quote, _exchange = exchange };
+        new() { _base = _base, _quote = _quote, _exchange = exchange };
 
     /// <summary>
     /// Returns an exchange-native string for a known exchange (e.g., Binance: "BTCUSDT"; OKX swap: "BTC-USDT-SWAP"),
     /// otherwise "BASE-QUOTE".
     /// </summary>
-    public override readonly string ToString()
+    public readonly override string ToString()
     {
         if (SymbolToString.TryGetValue(this, out var cached))
             return cached;
@@ -98,11 +95,17 @@ public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbo
         var at = text.LastIndexOf('@');
         if (at >= 0)
         {
-            if (!TryParsePresetName(text[(at + 1)..], out var ex))
+            // exchange
+            var exchangeSpan = text[(at + 1)..];
+            if (!(ExchangeExtensions.TryParsePreset(exchangeSpan, out var exchange) ||
+                 ExchangeExtensions.TryParseSlug(exchangeSpan, out exchange)))
+            {
                 return false;
+            }
+
             if (!TryParseBaseQuote(text[..at], out var ba, out var qa))
                 return false;
-            symbol = new Symbol { _base = ba, _quote = qa, _exchange = ex };
+            symbol = new Symbol { _base = ba, _quote = qa, _exchange = exchange };
             return true;
         }
 
@@ -157,10 +160,14 @@ public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbo
 
         var hasA = TryGetPresetName(_exchange, out var pa);
         var hasB = TryGetPresetName(other._exchange, out var pb);
-        if (hasA && hasB)
-            return string.CompareOrdinal(pa, pb);
-        if (hasA)
-            return 1;
+        switch (hasA)
+        {
+            case true when hasB:
+                return string.CompareOrdinal(pa, pb);
+            case true:
+                return 1;
+        }
+
         if (hasB)
             return -1;
         return 0;
@@ -175,19 +182,12 @@ public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbo
         => !string.IsNullOrEmpty(s) && TryParse(s.AsSpan(), out var sym) && Equals(sym);
 
     /// <summary>Determines equality with an arbitrary object.</summary>
-    public override readonly bool Equals(object? obj) => obj is Symbol s && Equals(s);
+    public readonly override bool Equals(object? obj) => obj is Symbol s && Equals(s);
 
     /// <summary>Returns a hash code based on components.</summary>
-    public override readonly int GetHashCode()
+    public readonly override int GetHashCode()
     {
-        unchecked
-        {
-            var h = 17;
-            h = (h * 31) + _base.GetHashCode();
-            h = (h * 31) + _quote.GetHashCode();
-            h = (h * 31) + _exchange.GetHashCode();
-            return h;
-        }
+        return HashCode.Combine(_base, _quote, _exchange);
     }
 
     /// <summary>Equality operator.</summary>
@@ -386,7 +386,7 @@ public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbo
         if (first <= 0 || first >= span.Length - 1)
             return false;
 
-        var second = span.Slice(first + 1).IndexOf('-');
+        var second = span[(first + 1)..].IndexOf('-');
         if (second < 0)
         {
             // "BASE-QUOTE" → spot
@@ -535,72 +535,6 @@ public struct Symbol : IEquatable<Symbol>, IEquatable<string>, IComparable<Symbo
         }
 
         name = string.Empty;
-        return false;
-    }
-
-    private static bool TryParsePresetName(ReadOnlySpan<char> name, out Exchange x)
-    {
-        if (name.SequenceEqual("BinanceSpot"))
-        {
-            x = Exchange.Binance | Exchange.Spot;
-            return true;
-        }
-
-        if (name.SequenceEqual("BinanceFutures"))
-        {
-            x = Exchange.Binance | Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined;
-            return true;
-        }
-
-        if (name.SequenceEqual("OKXSpot"))
-        {
-            x = Exchange.OKX | Exchange.Spot;
-            return true;
-        }
-
-        if (name.SequenceEqual("OKXFutures"))
-        {
-            x = Exchange.OKX | Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined;
-            return true;
-        }
-
-        if (name.SequenceEqual("OKXSwap"))
-        {
-            x = Exchange.OKX | Exchange.Swap | Exchange.Perpetual | Exchange.UsdMargined;
-            return true;
-        }
-
-        if (name.SequenceEqual("KuCoinSpot"))
-        {
-            x = Exchange.KuCoin | Exchange.Spot;
-            return true;
-        }
-
-        if (name.SequenceEqual("KuCoinFutures"))
-        {
-            x = Exchange.KuCoin | Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined;
-            return true;
-        }
-
-        if (name.SequenceEqual("BybitSpot"))
-        {
-            x = Exchange.Bybit | Exchange.Spot;
-            return true;
-        }
-
-        if (name.SequenceEqual("BybitFutures"))
-        {
-            x = Exchange.Bybit | Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined;
-            return true;
-        }
-
-        if (name.SequenceEqual("BitgetFutures"))
-        {
-            x = Exchange.Bitget | Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined;
-            return true;
-        }
-
-        x = Exchange.None;
         return false;
     }
 

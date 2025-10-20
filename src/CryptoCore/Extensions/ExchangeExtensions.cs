@@ -1,4 +1,8 @@
-﻿using CryptoCore.Primitives;
+﻿using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
+using CryptoCore.Primitives;
 
 namespace CryptoCore.Extensions;
 
@@ -10,6 +14,27 @@ namespace CryptoCore.Extensions;
 /// </summary>
 public static class ExchangeExtensions
 {
+    /// <summary>Short slug for Binance Spot.</summary>
+    public const string BINANCE_SPOT_SLUG = "binance";
+
+    /// <summary>Short slug for Binance USD-margined Perpetual Futures.</summary>
+    public const string BINANCE_FUTURES_SLUG = "binance-futures";
+
+    /// <summary>Short slug for OKX Spot.</summary>
+    public const string OKX_SPOT_SLUG = "okx";
+
+    /// <summary>Short slug for OKX USD-margined Perpetual Futures.</summary>
+    public const string OKX_FUTURES_SLUG = "okx-futures";
+
+    /// <summary>Short slug for OKX USD-margined Perpetual Swaps.</summary>
+    public const string OKX_SWAP_SLUG = "okx-swap";
+
+    /// <summary>Short slug for KuCoin Spot.</summary>
+    public const string KUCOIN_SPOT_SLUG = "kucoin";
+
+    /// <summary>Short slug for KuCoin USD-margined Perpetual Futures.</summary>
+    public const string KUCOIN_FUTURES_SLUG = "kucoin-futures";
+
     /// <summary>
     /// Checks if <paramref name="x"/> includes the specified market-type flag.
     /// Only flags within <see cref="Exchange.MarketMask"/> are considered valid input.
@@ -156,20 +181,50 @@ public static class ExchangeExtensions
     }
 
     /// <summary>
-    /// Builds a human-friendly slug:
-    /// e.g., "binance-futures-perpetual-usdm", "okx-spot", or multiple venues joined by commas.
-    /// Missing venue yields "unknown" prefix.
+    /// Returns the short slug (from <see cref="DescriptionAttribute"/>) for a known preset,
+    /// or an empty string if <paramref name="x"/> is not one of the presets.
     /// </summary>
-    /// <param name="x">The composite <see cref="Exchange"/> value.</param>
-    /// <returns>Slug string for logging/serialization.</returns>
+    /// <param name="x">Exchange flags.</param>
+    /// <returns>Short slug like "okx-swap", or empty string for non-preset combinations.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static string ToSlug(this Exchange x)
     {
-        var venues = x.EnumerateVenues().ToList();
-        if (venues.Count == 0)
-            return BuildSlug(Exchange.None, x);
+        if (x == (Exchange.Binance | Exchange.Spot))
+        {
+            return BINANCE_SPOT_SLUG;
+        }
 
-        return string.Join(",",
-            venues.Select(v => BuildSlug(v, x)));
+        if (x == (Exchange.Binance | Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined))
+        {
+            return BINANCE_FUTURES_SLUG;
+        }
+
+        if (x == (Exchange.OKX | Exchange.Spot))
+        {
+            return OKX_SPOT_SLUG;
+        }
+
+        if (x == (Exchange.OKX | Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined))
+        {
+            return OKX_FUTURES_SLUG;
+        }
+
+        if (x == (Exchange.OKX | Exchange.Swap | Exchange.Perpetual | Exchange.UsdMargined))
+        {
+            return OKX_SWAP_SLUG;
+        }
+
+        if (x == (Exchange.KuCoin | Exchange.Spot))
+        {
+            return KUCOIN_SPOT_SLUG;
+        }
+
+        if (x == (Exchange.KuCoin | Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined))
+        {
+            return KUCOIN_FUTURES_SLUG;
+        }
+
+        return string.Empty;
     }
 
     /// <summary>
@@ -186,48 +241,101 @@ public static class ExchangeExtensions
         if (string.IsNullOrWhiteSpace(slug))
             return Exchange.None;
 
-        var tokens = slug.Trim().ToLowerInvariant().Split('-', StringSplitOptions.RemoveEmptyEntries);
-        var venue = tokens.FirstOrDefault();
-        var rest = tokens.Skip(1).ToHashSet();
-
-        var x = venue switch
-        {
-            "binance" => Exchange.Binance,
-            "okx" or "okex" => Exchange.OKX,
-            "kucoin" => Exchange.KuCoin,
-            "bybit" => Exchange.Bybit,
-            "deribit" => Exchange.Deribit,
-            "bitget" => Exchange.Bitget,
-            _ => Exchange.None
-        };
-
-        if (x == Exchange.None)
-            return Exchange.None;
-
-        if (rest.Contains("spot"))
-            x |= Exchange.Spot;
-        if (rest.Contains("futures"))
-            x |= Exchange.Futures;
-        if (rest.Contains("options"))
-            x |= Exchange.Options;
-        if (rest.Contains("swap"))
-            x |= Exchange.Swap;
-
-        if (rest.Contains("perpetual") || rest.Contains("perp"))
-            x |= Exchange.Perpetual;
-        if (rest.Contains("delivery") || rest.Contains("quarterly"))
-            x |= Exchange.Delivery;
-
-        if (rest.Contains("coin-m") || rest.Contains("coinm") || rest.Contains("coin"))
-            x |= Exchange.CoinMargined;
-        if (rest.Contains("usdm") || rest.Contains("usd-m") || rest.Contains("usd"))
-            x |= Exchange.UsdMargined;
-
-        if (x.IsFutures() && !x.IsPerpetual() && !x.IsDelivery())
-            x |= Exchange.Perpetual;
-
-        return x;
+        if (!TryParseSlug(slug, out var exchange))
+            throw new InvalidEnumArgumentException($"Exchange slug is not configured for {slug}");
+        return exchange;
     }
+
+    /// <summary>
+    /// Tries to parse a short slug (from <see cref="DescriptionAttribute"/>) into <see cref="Exchange"/>.
+    /// Accepts only known preset slugs like "okx-swap".
+    /// </summary>
+    /// <param name="slug">Short slug (case-insensitive).</param>
+    /// <param name="result">Parsed value.</param>
+    /// <returns>True on success.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryParseSlug(ReadOnlySpan<char> slug, out Exchange result)
+    {
+        slug = slug.Trim();
+        if (slug.Equals(BINANCE_SPOT_SLUG.AsSpan(), StringComparison.OrdinalIgnoreCase))
+        {
+            result = Exchange.Binance | Exchange.Spot;
+            return true;
+        }
+
+        if (slug.Equals(BINANCE_FUTURES_SLUG.AsSpan(), StringComparison.OrdinalIgnoreCase))
+        {
+            result = Exchange.Binance | Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined;
+            return true;
+        }
+
+        if (slug.Equals(OKX_SPOT_SLUG.AsSpan(), StringComparison.OrdinalIgnoreCase))
+        {
+            result = Exchange.OKX | Exchange.Spot;
+            return true;
+        }
+
+        if (slug.Equals(OKX_FUTURES_SLUG.AsSpan(), StringComparison.OrdinalIgnoreCase))
+        {
+            result = Exchange.OKX | Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined;
+            return true;
+        }
+
+        if (slug.Equals(OKX_SWAP_SLUG.AsSpan(), StringComparison.OrdinalIgnoreCase))
+        {
+            result = Exchange.OKX | Exchange.Swap | Exchange.Perpetual | Exchange.UsdMargined;
+            return true;
+        }
+
+        if (slug.Equals(KUCOIN_SPOT_SLUG.AsSpan(), StringComparison.OrdinalIgnoreCase))
+        {
+            result = Exchange.KuCoin | Exchange.Spot;
+            return true;
+        }
+
+        if (slug.Equals(KUCOIN_FUTURES_SLUG.AsSpan(), StringComparison.OrdinalIgnoreCase))
+        {
+            result = Exchange.KuCoin | Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined;
+            return true;
+        }
+
+        result = Exchange.None;
+        return false;
+    }
+
+    /// <summary>
+    /// Tries to parse either a short slug (Description) or an enum name into <see cref="Exchange"/>.
+    /// Enum names are matched case-insensitively (e.g., "OKXSwap", "BinanceFutures").
+    /// </summary>
+    /// <param name="text">Input text.</param>
+    /// <param name="result">Parsed value.</param>
+    /// <returns>True on success.</returns>
+    public static bool TryParsePreset(ReadOnlySpan<char> text, out Exchange result)
+    {
+        // 1) Try slug first (no allocations).
+        if (TryParseSlug(text, out result))
+        {
+            return true;
+        }
+
+        // 2) Try enum name (requires string for Enum.TryParse).
+        if (text.Length == 0)
+        {
+            result = Exchange.None;
+            return false;
+        }
+
+        var s = text.ToString();
+        if (Enum.TryParse(s, ignoreCase: true, out Exchange x))
+        {
+            result = x;
+            return true;
+        }
+
+        result = Exchange.None;
+        return false;
+    }
+
     // ---------- Internal helpers ----------
 
     private static readonly Exchange[] VenueBits =
@@ -235,54 +343,4 @@ public static class ExchangeExtensions
         Exchange.Binance, Exchange.OKX, Exchange.KuCoin,
         Exchange.Bybit, Exchange.Deribit, Exchange.Bitget
     };
-
-    /// <summary>
-    /// Builds a slug for a single venue combined with the market and contract bits from <paramref name="x"/>.
-    /// </summary>
-    private static string BuildSlug(Exchange venue, Exchange x)
-    {
-        var parts = new List<string>();
-
-        // venue
-        if (venue == Exchange.None)
-        {
-            parts.Add("unknown");
-        }
-        else
-        {
-            parts.Add(venue switch
-            {
-                Exchange.Binance => "binance",
-                Exchange.OKX => "okx",
-                Exchange.KuCoin => "kucoin",
-                Exchange.Bybit => "bybit",
-                Exchange.Deribit => "deribit",
-                Exchange.Bitget => "bitget",
-                _ => "unknown"
-            });
-        }
-
-        // market
-        if (x.IsSpot())
-            parts.Add("spot");
-        else if (x.IsFutures())
-            parts.Add("futures");
-        else if (x.IsSwap())
-            parts.Add("swap");
-        else if (x.IsOptions())
-            parts.Add("options");
-
-        // contract attrs
-        if (x.IsPerpetual())
-            parts.Add("perpetual");
-        else if (x.IsDelivery())
-            parts.Add("delivery");
-
-        if (x.IsUsdMargined())
-            parts.Add("usdm");
-        else if (x.IsCoinMargined())
-            parts.Add("coinm");
-
-        return string.Join("-", parts);
-    }
 }

@@ -8,23 +8,26 @@ namespace CryptoCore.Serialization.Newtonsoft;
 /// and deserializes from strings accepted by <see cref="Asset.TryParse(ReadOnlySpan{char}, out Asset)"/>.
 /// JSON null → <c>default(Asset)</c>.
 /// </summary>
-public sealed class AssetNewtonsoftConverter : JsonConverter
+public sealed class AssetNewtonsoftConverter : JsonConverter<Asset>
 {
-    /// <summary>Returns true when the given type is <see cref="Asset"/>.</summary>
-    public override bool CanConvert(Type objectType) => objectType == typeof(Asset);
+    /// <inheritdoc/>
+    public override bool CanRead => true;
 
     /// <inheritdoc/>
-    public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
+    public override bool CanWrite => true;
+
+    /// <inheritdoc/>
+    public override Asset ReadJson(JsonReader reader, Type objectType, Asset existingValue, bool hasExistingValue, JsonSerializer serializer)
     {
         if (reader.TokenType == JsonToken.Null)
-            return default(Asset);
+            return default;
 
         if (reader.TokenType != JsonToken.String)
             throw new JsonSerializationException("Expected string for Asset.");
 
         var s = (string?)reader.Value;
         if (string.IsNullOrWhiteSpace(s))
-            return default(Asset);
+            return default;
 
         if (!Asset.TryParse(s.AsSpan(), out var asset))
             throw new JsonSerializationException($"Invalid Asset: '{s}'.");
@@ -33,9 +36,8 @@ public sealed class AssetNewtonsoftConverter : JsonConverter
     }
 
     /// <inheritdoc/>
-    public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
+    public override void WriteJson(JsonWriter writer, Asset value, JsonSerializer serializer)
     {
-        var asset = value is Asset a ? a : default;
-        writer.WriteValue(asset.ToString());
+        writer.WriteValue(value.ToString());
     }
 }

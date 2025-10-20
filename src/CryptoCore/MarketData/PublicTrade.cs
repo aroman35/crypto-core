@@ -57,7 +57,7 @@ public struct PublicTrade : IEquatable<PublicTrade>
     /// Creates a new <see cref="PublicTrade"/>.
     /// </summary>
     public static PublicTrade Create(Symbol symbol, ulong tradeId, long tsMs, double price, double qty, TradeAttributes attributes = TradeAttributes.None)
-        => new PublicTrade
+        => new()
         {
             Symbol = symbol,
             TradeId = tradeId,
@@ -138,12 +138,12 @@ public struct PublicTrade : IEquatable<PublicTrade>
         unchecked
         {
             var h = 17;
-            h = (h * 31) + Symbol.GetHashCode();
-            h = (h * 31) + TradeId.GetHashCode();
-            h = (h * 31) + TimestampMs.GetHashCode();
-            h = (h * 31) + Price.GetHashCode();
-            h = (h * 31) + Quantity.GetHashCode();
-            h = (h * 31) + Attributes.GetHashCode();
+            h = h * 31 + Symbol.GetHashCode();
+            h = h * 31 + TradeId.GetHashCode();
+            h = h * 31 + TimestampMs.GetHashCode();
+            h = h * 31 + Price.GetHashCode();
+            h = h * 31 + Quantity.GetHashCode();
+            h = h * 31 + Attributes.GetHashCode();
             return h;
         }
     }

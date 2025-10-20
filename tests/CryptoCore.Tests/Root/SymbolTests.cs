@@ -129,4 +129,62 @@ public class SymbolTests
         Should.Throw<FormatException>(() => Symbol.Parse("BTCUSDX")); // unknown stable suffix, no sep
         Should.Throw<FormatException>(() => Symbol.Parse("BTC-USDT@Unknown")); // unknown preset
     }
+
+    [Fact(DisplayName = "Symbol: Delimiter-less split by stable suffix; ToString generic")]
+    public void Symbol_Split_Stable_Suffix_Generic_ToString()
+    {
+        var s = Symbol.Parse("BTCUSDT");
+        s.BaseAsset.ToString().ShouldBe("BTC");
+        s.QuoteAsset.ToString().ShouldBe("USDT");
+        // Exchange not set -> generic
+        s.ToString().ShouldBe("BTCUSDT");
+    }
+
+    [Fact(DisplayName = "Symbol: Binance native ToString when Exchange set")]
+    public void Symbol_Binance_Native_ToString()
+    {
+        var s = Symbol.Parse("BTCUSDT").For(Exchange.Binance | Exchange.Spot);
+        s.ToString().ShouldBe("BTCUSDT");
+    }
+
+    [Fact(DisplayName = "Symbol: OKX Spot and SWAP parsing/formatting")]
+    public void Symbol_OKX_Spot_Swap()
+    {
+        var s1 = Symbol.Parse("ETH-USDT@OKXSpot");
+        s1.Exchange.IsOKX().ShouldBeTrue();
+        s1.Exchange.IsSpot().ShouldBeTrue();
+        s1.ToString().ShouldBe("ETH-USDT");
+
+        var s2 = Symbol.Parse("BTC-USDT-SWAP");
+        s2.Exchange.IsOKX().ShouldBeTrue();
+        s2.Exchange.IsSwap().ShouldBeTrue();
+        s2.Exchange.IsPerpetual().ShouldBeTrue();
+        s2.Exchange.IsUsdMargined().ShouldBeTrue();
+        s2.ToString().ShouldBe("BTC-USDT-SWAP");
+    }
+
+    [Fact(DisplayName = "Symbol: AddStablecoin extends suffix registry")]
+    public void Symbol_AddStablecoin_Runtime()
+    {
+        // Before adding custom suffix, parsing without delimiter must fail.
+        Symbol.TryParse("FOOXYZ".AsSpan(), out _).ShouldBeFalse();
+
+        // After registering runtime suffix — success.
+        Symbol.AddStablecoin("XYZ");
+        var s2 = Symbol.Parse("FOOXYZ");
+        s2.BaseAsset.ToString().ShouldBe("FOO");
+        s2.QuoteAsset.ToString().ShouldBe("XYZ");
+    }
+
+    [Fact(DisplayName = "Symbol: TryFormat success and failure")]
+    public void Symbol_TryFormat()
+    {
+        var s = Symbol.Parse("SOLUSDC").For(Exchange.Binance | Exchange.Spot);
+        Span<char> buf = stackalloc char[7];
+        s.TryFormat(buf, out var w).ShouldBeTrue();
+        new string(buf[..w]).ShouldBe("SOLUSDC");
+
+        Span<char> small = stackalloc char[3];
+        s.TryFormat(small, out _).ShouldBeFalse();
+    }
 }

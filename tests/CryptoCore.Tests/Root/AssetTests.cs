@@ -25,7 +25,7 @@ namespace CryptoCore.Tests.Root
         public void Parse_Rejects_InvalidLengths()
         {
             Should.Throw<FormatException>(() => Asset.Parse(""));
-            Should.Throw<FormatException>(() => Asset.Parse(new string('A', Asset.MaxLength + 1)));
+            Should.Throw<FormatException>(() => Asset.Parse(new string('A', Asset.MAX_LENGTH + 1)));
         }
 
         [Fact(DisplayName = "TryParse: rejects non-ASCII characters")]
@@ -127,6 +127,51 @@ namespace CryptoCore.Tests.Root
             Asset.BTC.ToString().ShouldBe("BTC");
             Asset.ETH.ToString().ShouldBe("ETH");
             Asset.BNB.ToString().ShouldBe("BNB");
+        }
+
+        [Fact(DisplayName = "Asset: Parse normalizes to upper and respects MAX_LENGTH")]
+        public void Asset_Parse_Upper_And_Length()
+        {
+            var a = Asset.Parse("usdt");
+            a.ToString().ShouldBe("USDT");
+
+            // exactly Max length
+            var max = new string('A', Asset.MAX_LENGTH);
+            var ok = Asset.TryParse(max.AsSpan(), out var ax);
+            ok.ShouldBeTrue();
+            ax.AsciiBytes.Length.ShouldBe(Asset.MAX_LENGTH);
+
+            // beyond Max length -> false
+            var over = new string('B', Asset.MAX_LENGTH + 1);
+            Asset.TryParse(over.AsSpan(), out _).ShouldBeFalse();
+        }
+
+        [Fact(DisplayName = "Asset: Rejects non-ASCII and invalid chars")]
+        public void Asset_Rejects_NonAscii()
+        {
+            Asset.TryParse("биток".AsSpan(), out _).ShouldBeFalse();
+            Asset.TryParse("US T".AsSpan(), out _).ShouldBeFalse();
+            Asset.TryParse("USDT!".AsSpan(), out _).ShouldBeFalse();
+        }
+
+        [Fact(DisplayName = "Asset: TryFromAscii accepts upper ASCII bytes")]
+        public void Asset_TryFromAscii()
+        {
+            var bytes = "eth"u8.ToArray();
+            var ok = Asset.TryFromAscii(bytes, out var a);
+            ok.ShouldBeTrue();
+            a.ToString().ShouldBe("ETH");
+        }
+
+        [Fact(DisplayName = "Asset: Equality and comparison")]
+        public void Asset_Equality_Comparison()
+        {
+            var a = Asset.Parse("BTC");
+            var b = Asset.Parse("btc");
+            (a == b).ShouldBeTrue();
+            (a != "ETH").ShouldBeTrue();
+            (a > Asset.Parse("ABC")).ShouldBeTrue();
+            (Asset.Parse("Z") > Asset.Parse("A")).ShouldBeTrue();
         }
     }
 }

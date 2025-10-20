@@ -57,7 +57,7 @@ public sealed class OrderBookStore : IAsyncDisposable
         await Task.CompletedTask;
     }
 
-    /// <summary>Returns existing or creates a new book for <paramref name="symbol"/>. Triggers snapshot fetch & WS subscription if needed.</summary>
+    /// <summary>Returns existing or creates a new book for <paramref name="symbol"/>. Triggers snapshot fetch and WS subscription if needed.</summary>
     public async Task<OrderBookL2> GetOrCreateAsync(Symbol symbol, CancellationToken ct = default)
     {
         var st = _books.GetOrAdd(symbol, s => new BookState(new OrderBookL2(s), _options.MaxBufferPerSymbol));
@@ -182,7 +182,7 @@ public sealed class OrderBookStore : IAsyncDisposable
     private async Task WithRetryAsync(Func<Task> op, CancellationToken ct)
     {
         var delay = _options.InitialBackoff;
-        for (int attempt = 1; ; attempt++)
+        for (var attempt = 1; ; attempt++)
         {
             try
             {

@@ -1,5 +1,4 @@
-﻿using System.Text;
-using CryptoConnector.Binance.Common;
+﻿using CryptoConnector.Binance.Common;
 using CryptoConnector.Binance.Parsers;
 using CryptoCore.Extensions;
 using CryptoCore.MarketData;
@@ -52,7 +51,7 @@ public class OrderBookPooledApplyTests
     [Fact(DisplayName = "OrderBook: apply Binance WS JSON via pooled parser")]
     public void Pooled_From_Binance_Json()
     {
-        var json = Encoding.UTF8.GetBytes(@"
+        var json = @"
         {
           ""e"": ""depthUpdate"",
           ""E"": 1700000000123,
@@ -62,7 +61,7 @@ public class OrderBookPooledApplyTests
           ""pu"": 99,
           ""b"": [[""40000.1"", ""0.5""], [""39999.9"", ""0""]],
           ""a"": [[""40000.2"", ""1.0""]]
-        }");
+        }"u8.ToArray();
 
         var book = new OrderBookL2(Symbol.Parse("BTCUSDT").For(Exchange.BinanceSpot));
         var provider = new SimpleSymbolProvider();

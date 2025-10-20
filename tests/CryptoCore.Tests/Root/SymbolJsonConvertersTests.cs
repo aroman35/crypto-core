@@ -5,6 +5,7 @@ using CryptoCore.Serialization.SystemTextJson;
 using CryptoCore.Primitives;
 using Newtonsoft.Json;
 using Shouldly;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace CryptoCore.Tests.Root;
 
@@ -22,7 +23,7 @@ public sealed class SymbolJsonConvertersTests
         var s = Symbol.Create(Asset.BTC, Asset.USDT, Exchange.BinanceFutures); // Binance: BTCUSDT
         var opts = new JsonSerializerOptions().AddCryptoCoreConverters();
 
-        var json = System.Text.Json.JsonSerializer.Serialize(s, opts);
+        var json = JsonSerializer.Serialize(s, opts);
         json.ShouldBe("\"BTCUSDT\"");
     }
 
@@ -32,7 +33,7 @@ public sealed class SymbolJsonConvertersTests
         var json = "\"ETHUSDC\"";
         var opts = new JsonSerializerOptions().AddCryptoCoreConverters();
 
-        var sym = System.Text.Json.JsonSerializer.Deserialize<Symbol>(json, opts);
+        var sym = JsonSerializer.Deserialize<Symbol>(json, opts);
         sym.ShouldNotBe(default);
         sym.BaseAsset.ToString().ShouldBe("ETH");
         sym.QuoteAsset.ToString().ShouldBe("USDC");
@@ -44,7 +45,7 @@ public sealed class SymbolJsonConvertersTests
         var json = "\"BTC-USDT-SWAP\"";
         var opts = new JsonSerializerOptions().AddCryptoCoreConverters();
 
-        var sym = System.Text.Json.JsonSerializer.Deserialize<Symbol>(json, opts);
+        var sym = JsonSerializer.Deserialize<Symbol>(json, opts);
         sym.ShouldNotBe(default);
         sym.Exchange.IsOKX().ShouldBeTrue();
         sym.Exchange.IsSwap().ShouldBeTrue();
@@ -63,12 +64,12 @@ public sealed class SymbolJsonConvertersTests
 
         var opts = new JsonSerializerOptions().AddCryptoCoreConverters();
 
-        var json = System.Text.Json.JsonSerializer.Serialize(w, opts);
+        var json = JsonSerializer.Serialize(w, opts);
         // OKX spot prints with dash; Binance spot prints concatenated form
         json.ShouldContain("\"Sym\":\"BNB-USDT\"");
         json.ShouldContain("\"NullableSym\":\"ETHUSDT\"");
 
-        var back = System.Text.Json.JsonSerializer.Deserialize<Wrapper>(json, opts);
+        var back = JsonSerializer.Deserialize<Wrapper>(json, opts);
         back.ShouldNotBeNull();
         back.Sym.ToString().ShouldBe("BNB-USDT");
         back.NullableSym!.Value.ToString().ShouldBe("ETHUSDT");
@@ -79,7 +80,7 @@ public sealed class SymbolJsonConvertersTests
     {
         var opts = new JsonSerializerOptions().AddCryptoCoreConverters();
         var json = "null";
-        var sym = System.Text.Json.JsonSerializer.Deserialize<Symbol>(json, opts);
+        var sym = JsonSerializer.Deserialize<Symbol>(json, opts);
         sym.ShouldBe(default);
     }
 
@@ -90,7 +91,7 @@ public sealed class SymbolJsonConvertersTests
         var json = "123";
         Should.Throw<System.Text.Json.JsonException>(() =>
         {
-            _ = System.Text.Json.JsonSerializer.Deserialize<Symbol>(json, opts);
+            _ = JsonSerializer.Deserialize<Symbol>(json, opts);
         });
     }
 
@@ -101,7 +102,7 @@ public sealed class SymbolJsonConvertersTests
         var json = "\"@not-a-symbol\"";
         Should.Throw<System.Text.Json.JsonException>(() =>
         {
-            _ = System.Text.Json.JsonSerializer.Deserialize<Symbol>(json, opts);
+            _ = JsonSerializer.Deserialize<Symbol>(json, opts);
         });
     }
 
@@ -163,5 +164,47 @@ public sealed class SymbolJsonConvertersTests
         {
             _ = JsonConvert.DeserializeObject<Symbol>("\"***\"", settings);
         });
+    }
+
+    [Fact(DisplayName = "System.Text.Json: Symbol (Binance native)")]
+    public void STJ_Symbol_Binance_Native()
+    {
+        var s = Symbol.Parse("BTCUSDT").For(Exchange.Binance | Exchange.Spot);
+        var opts = new JsonSerializerOptions().AddCryptoCoreConverters();
+
+        var json = JsonSerializer.Serialize(s, opts);
+        json.ShouldBe("\"BTCUSDT\"");
+
+        var back = JsonSerializer.Deserialize<Symbol>(json, opts);
+        back.ShouldBe(s);
+        back.ToString().ShouldBe("BTCUSDT");
+    }
+
+    [Fact(DisplayName = "Newtonsoft: Symbol (generic when no exchange)")]
+    public void Newtonsoft_Symbol_Generic()
+    {
+        var s = Symbol.Parse("SOLUSDC"); // no exchange -> generic form
+        var settings = new JsonSerializerSettings().AddCryptoCoreConverters();
+
+        var json = JsonConvert.SerializeObject(s, settings);
+        json.ShouldBe("\"SOLUSDC\"");
+
+        var back = JsonConvert.DeserializeObject<Symbol>(json, settings);
+        back.ShouldBe(s);
+        back.ToString().ShouldBe("SOLUSDC");
+    }
+
+    [Fact(DisplayName = "Symbol as dictionary key (STJ)")]
+    public void STJ_Symbol_As_Key()
+    {
+        var dict = new Dictionary<Symbol, int>
+        {
+            [Symbol.Parse("ETHUSDT").For(Exchange.Binance | Exchange.Spot)] = 1,
+            [Symbol.Parse("BTC-USDT@OKXSpot")] = 2
+        };
+        var opts = new JsonSerializerOptions().AddCryptoCoreConverters();
+        var json = JsonSerializer.Serialize(dict, opts);
+        json.ShouldContain("ETHUSDT");
+        json.ShouldContain("BTC-USDT");
     }
 }

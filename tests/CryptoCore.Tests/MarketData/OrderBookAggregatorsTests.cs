@@ -25,7 +25,7 @@ public class OrderBookAggregatorsTests
 
         var (vwapBid, qb) = book.ComputeVwap(Side.Buy, topLevels: 2);
         qb.IsEquals(7).ShouldBeTrue();
-        vwapBid.IsEquals(((100*5)+(99*2))/7.0).ShouldBeTrue();
+        vwapBid.IsEquals((100*5+99*2)/7.0).ShouldBeTrue();
 
         var (vwapAsk, qa) = book.ComputeVwap(Side.Sell, topLevels: 1);
         qa.IsEquals(3).ShouldBeTrue();

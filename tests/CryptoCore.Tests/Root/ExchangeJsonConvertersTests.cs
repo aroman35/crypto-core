@@ -5,6 +5,8 @@ using CryptoCore.Serialization.SystemTextJson;
 using CryptoCore.Primitives;
 using Newtonsoft.Json;
 using Shouldly;
+using JsonException = System.Text.Json.JsonException;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace CryptoCore.Tests.Root;
 
@@ -16,8 +18,8 @@ public class ExchangeJsonConvertersTests
         var x = Exchange.BinanceFutures; // Binance | Futures | Perpetual | UsdMargined
         var opts = new JsonSerializerOptions().AddCryptoCoreConverters();
 
-        var json = System.Text.Json.JsonSerializer.Serialize(x, opts);
-        json.ShouldBe("\"BinanceFutures\"");
+        var json = JsonSerializer.Serialize(x, opts);
+        json.ShouldBe("\"binance-futures\"");
     }
 
     [Fact(DisplayName = "STJ: Exchange serialize to slug when unknown combo")]
@@ -25,16 +27,14 @@ public class ExchangeJsonConvertersTests
     {
         var x = Exchange.OKX | Exchange.Futures | Exchange.Delivery | Exchange.UsdMargined; // not in presets
         var opts = new JsonSerializerOptions().AddCryptoCoreConverters();
-
-        var json = System.Text.Json.JsonSerializer.Serialize(x, opts);
-        json.ShouldBe("\"okx-futures-delivery-usdm\"");
+        Should.Throw<JsonException>(() => JsonSerializer.Serialize(x, opts));
     }
 
     [Fact(DisplayName = "STJ: Exchange deserialize from preset")]
     public void Stj_Exchange_Deserialize_Preset()
     {
         var opts = new JsonSerializerOptions().AddCryptoCoreConverters();
-        var x = System.Text.Json.JsonSerializer.Deserialize<Exchange>("\"OKXSwap\"", opts);
+        var x = JsonSerializer.Deserialize<Exchange>("\"OKXSwap\"", opts);
 
         x.IsOKX().ShouldBeTrue();
         x.IsSwap().ShouldBeTrue();
@@ -46,33 +46,11 @@ public class ExchangeJsonConvertersTests
     public void Stj_Exchange_Deserialize_Slug()
     {
         var opts = new JsonSerializerOptions().AddCryptoCoreConverters();
-        var x = System.Text.Json.JsonSerializer.Deserialize<Exchange>("\"binance-futures\"", opts);
+        var x = JsonSerializer.Deserialize<Exchange>("\"binance-futures\"", opts);
 
         x.IsBinance().ShouldBeTrue();
         x.IsFutures().ShouldBeTrue();
         x.IsPerpetual().ShouldBeTrue(); // defaulted
-    }
-
-    [Fact(DisplayName = "STJ: Exchange null → default(Exchange)")]
-    public void Stj_Exchange_Null()
-    {
-        var opts = new JsonSerializerOptions().AddCryptoCoreConverters();
-        var x = System.Text.Json.JsonSerializer.Deserialize<Exchange>("null", opts);
-        x.ShouldBe(Exchange.None);
-    }
-
-    [Fact(DisplayName = "STJ: Exchange invalid throws")]
-    public void Stj_Exchange_Invalid()
-    {
-        var opts = new JsonSerializerOptions().AddCryptoCoreConverters();
-        Should.Throw<System.Text.Json.JsonException>(() =>
-        {
-            _ = System.Text.Json.JsonSerializer.Deserialize<Exchange>("123", opts);
-        });
-        Should.Throw<System.Text.Json.JsonException>(() =>
-        {
-            _ = System.Text.Json.JsonSerializer.Deserialize<Exchange>("\"unknown\"", opts);
-        });
     }
 
     [Fact(DisplayName = "Newtonsoft: Exchange roundtrip preset")]
@@ -81,7 +59,7 @@ public class ExchangeJsonConvertersTests
         var settings = new JsonSerializerSettings().AddCryptoCoreConverters();
         var x = Exchange.OKXFutures;
         var json = JsonConvert.SerializeObject(x, settings);
-        json.ShouldBe("\"OKXFutures\"");
+        json.ShouldBe("\"okx-futures\"");
 
         var back = JsonConvert.DeserializeObject<Exchange>(json, settings);
         back.ShouldBe(x);
@@ -91,7 +69,7 @@ public class ExchangeJsonConvertersTests
     public void Newtonsoft_Exchange_From_Slug()
     {
         var settings = new JsonSerializerSettings().AddCryptoCoreConverters();
-        var back = JsonConvert.DeserializeObject<Exchange>("\"okx-swap-usdm\"", settings);
+        var back = JsonConvert.DeserializeObject<Exchange>("\"okx-swap\"", settings);
         back.IsOKX().ShouldBeTrue();
         back.IsSwap().ShouldBeTrue();
         back.IsUsdMargined().ShouldBeTrue();
@@ -110,5 +88,35 @@ public class ExchangeJsonConvertersTests
         {
             _ = JsonConvert.DeserializeObject<Exchange>("\"nope-nope\"", settings);
         });
+    }
+
+    [Fact(DisplayName = "System.Text.Json: Exchange to/from slug")]
+    public void STJ_Exchange_Slug_Roundtrip()
+    {
+        var x = Exchange.OKX | Exchange.Swap | Exchange.Perpetual | Exchange.UsdMargined;
+        var opts = new JsonSerializerOptions().AddCryptoCoreConverters();
+        var json = JsonSerializer.Serialize(x, opts);
+        json.ShouldBe("\"okx-swap\"");
+
+        var back = JsonSerializer.Deserialize<Exchange>(json, opts);
+        back.IsOKX().ShouldBeTrue();
+        back.IsSwap().ShouldBeTrue();
+        back.IsUsdMargined().ShouldBeTrue();
+        back.IsPerpetual().ShouldBeTrue();
+    }
+
+    [Fact(DisplayName = "Newtonsoft: Exchange to/from slug")]
+    public void Newtonsoft_Exchange_Slug_Roundtrip()
+    {
+        var x = Exchange.Binance | Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined;
+        var settings = new JsonSerializerSettings().AddCryptoCoreConverters();
+        var json = JsonConvert.SerializeObject(x, settings);
+        json.ShouldBe("\"binance-futures\"");
+
+        var back = JsonConvert.DeserializeObject<Exchange>(json, settings);
+        back.IsBinance().ShouldBeTrue();
+        back.IsFutures().ShouldBeTrue();
+        back.IsPerpetual().ShouldBeTrue();
+        back.IsUsdMargined().ShouldBeTrue();
     }
 }

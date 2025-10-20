@@ -1,7 +1,7 @@
 ﻿namespace CryptoConnector.Binance.Common;
 
 /// <summary>
-/// Known public WebSocket endpoints & helpers.
+/// Known public WebSocket endpoints and helpers.
 /// </summary>
 public static class BinanceStreams
 {

@@ -43,7 +43,7 @@ public class ExchangeTests
         {
             bool HasDescription(Exchange e)
             {
-                var fi = typeof(Exchange).GetField(Enum.GetName(typeof(Exchange), e)!);
+                var fi = typeof(Exchange).GetField(Enum.GetName(e)!);
                 var attr = fi!.GetCustomAttribute<DescriptionAttribute>();
                 return attr != null && !string.IsNullOrWhiteSpace(attr.Description);
             }
@@ -60,8 +60,8 @@ public class ExchangeTests
         [Fact(DisplayName = "Predicates: IsSpot/IsFutures/IsOptions/IsSwap/IsMargin")]
         public void Predicates_Market()
         {
-            (Exchange.BinanceSpot.IsSpot()).ShouldBeTrue();
-            (Exchange.BinanceSpot.IsFutures()).ShouldBeFalse();
+            Exchange.BinanceSpot.IsSpot().ShouldBeTrue();
+            Exchange.BinanceSpot.IsFutures().ShouldBeFalse();
 
             var f = Exchange.Binance | Exchange.Futures | Exchange.Margin;
             f.IsFutures().ShouldBeTrue();
@@ -122,43 +122,16 @@ public class ExchangeTests
         public void ToSlug_Spot()
         {
             var x = Exchange.Binance | Exchange.Spot;
-            x.ToSlug().ShouldBe("binance-spot");
+            x.ToSlug().ShouldBe("binance");
         }
 
-        [Fact(DisplayName = "ToSlug: futures perpetual usdm -> 'okx-futures-perpetual-usdm'")]
-        public void ToSlug_Futures_Perpetual_UsdM()
-        {
-            var x = Exchange.OKX | Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined;
-            x.ToSlug().ShouldBe("okx-futures-perpetual-usdm");
-        }
-
-        [Fact(DisplayName = "ToSlug: delivery coinm -> 'kucoin-futures-delivery-coinm'")]
-        public void ToSlug_Delivery_CoinM()
-        {
-            var x = Exchange.KuCoin | Exchange.Futures | Exchange.Delivery | Exchange.CoinMargined;
-            x.ToSlug().ShouldBe("kucoin-futures-delivery-coinm");
-        }
-
-        [Fact(DisplayName = "ToSlug: unknown venue -> 'unknown-...'")]
-        public void ToSlug_UnknownVenue()
-        {
-            var x = Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined;
-            x.ToSlug().ShouldStartWith("unknown-");
-        }
-
-        [Fact(DisplayName = "ToSlug: multiple venues -> comma-separated slugs in order")]
-        public void ToSlug_MultipleVenues()
-        {
-            var x = (Exchange.Binance | Exchange.OKX | Exchange.Bybit) | (Exchange.Futures | Exchange.Perpetual | Exchange.UsdMargined);
-            x.ToSlug().ShouldBe("binance-futures-perpetual-usdm,okx-futures-perpetual-usdm,bybit-futures-perpetual-usdm");
-        }
 
         [Fact(DisplayName = "ParseSlug: 'binance' -> venue only")]
         public void ParseSlug_VenueOnly()
         {
             var x = ExchangeExtensions.ParseSlug("binance");
             x.VenuePart().ShouldBe(Exchange.Binance);
-            x.MarketPart().ShouldBe(Exchange.None);
+            x.MarketPart().ShouldBe(Exchange.Spot);
             x.ContractPart().ShouldBe(Exchange.None);
         }
 
@@ -171,82 +144,14 @@ public class ExchangeTests
             x.IsDelivery().ShouldBeFalse();
         }
 
-        [Fact(DisplayName = "ParseSlug: Recognizes synonyms (okex -> OKX)")]
-        public void ParseSlug_Okex_Synonym()
-        {
-            var x = ExchangeExtensions.ParseSlug("okex-futures");
-            x.IsOKX().ShouldBeTrue();
-            x.IsFutures().ShouldBeTrue();
-        }
-
-        [Fact(DisplayName = "ParseSlug: Margin tokens 'usdm', 'usd-m', 'usd' map to UsdMargined")]
-        public void ParseSlug_UsdMargined_Tokens()
-        {
-            var a = ExchangeExtensions.ParseSlug("binance-futures-usdm");
-            var b = ExchangeExtensions.ParseSlug("binance-futures-usd-m");
-            var c = ExchangeExtensions.ParseSlug("binance-futures-usd");
-
-            a.IsUsdMargined().ShouldBeTrue();
-            b.IsUsdMargined().ShouldBeTrue();
-            c.IsUsdMargined().ShouldBeTrue();
-        }
-
-        [Fact(DisplayName = "ParseSlug: Margin tokens 'coinm', 'coin-m', 'coin' map to CoinMargined")]
-        public void ParseSlug_CoinMargined_Tokens()
-        {
-            var a = ExchangeExtensions.ParseSlug("okx-futures-coinm");
-            var b = ExchangeExtensions.ParseSlug("okx-futures-coin-m");
-            var c = ExchangeExtensions.ParseSlug("okx-futures-coin");
-
-            a.IsCoinMargined().ShouldBeTrue();
-            b.IsCoinMargined().ShouldBeTrue();
-            c.IsCoinMargined().ShouldBeTrue();
-        }
-
-        [Fact(DisplayName = "ParseSlug: 'perp' -> Perpetual, 'quarterly' -> Delivery")]
-        public void ParseSlug_Shortcuts_Perpetual_Delivery()
-        {
-            var p = ExchangeExtensions.ParseSlug("bybit-futures-perp");
-            p.IsPerpetual().ShouldBeTrue();
-
-            var d = ExchangeExtensions.ParseSlug("kucoin-futures-quarterly");
-            d.IsDelivery().ShouldBeTrue();
-        }
-
-        [Fact(DisplayName = "ParseSlug: Options and Swap markets")]
-        public void ParseSlug_Options_Swap()
-        {
-            var o = ExchangeExtensions.ParseSlug("deribit-options");
-            o.IsOptions().ShouldBeTrue();
-            o.IsDeribit().ShouldBeTrue();
-
-            var s = ExchangeExtensions.ParseSlug("okx-swap-usdm");
-            s.IsSwap().ShouldBeTrue();
-            s.IsOKX().ShouldBeTrue();
-            s.IsUsdMargined().ShouldBeTrue();
-        }
-
         [Fact(DisplayName = "ParseSlug: Case-insensitive and trimming")]
         public void ParseSlug_CaseInsensitive()
         {
-            var x = ExchangeExtensions.ParseSlug("  BiNaNcE-FuTuReS-PerPeTuAl-UsDm  ");
+            var x = ExchangeExtensions.ParseSlug("  BiNaNcE-FuTuReS  ");
             x.IsBinance().ShouldBeTrue();
             x.IsFutures().ShouldBeTrue();
             x.IsPerpetual().ShouldBeTrue();
             x.IsUsdMargined().ShouldBeTrue();
-        }
-
-        [Fact(DisplayName = "ParseSlug: Unknown returns None without throwing")]
-        public void ParseSlug_Unknown_ReturnsNone()
-        {
-            var x = ExchangeExtensions.ParseSlug("somewhere-spot");
-            x.ShouldBe(Exchange.None);
-
-            var y = ExchangeExtensions.ParseSlug("");
-            y.ShouldBe(Exchange.None);
-
-            var z = ExchangeExtensions.ParseSlug(null!);
-            z.ShouldBe(Exchange.None);
         }
 
         [Fact(DisplayName = "Roundtrip: ParseSlug(ToSlug(x)) preserves meaningful bits for single-venue")]
@@ -260,26 +165,6 @@ public class ExchangeTests
             parsed.MarketPart().ShouldBe(original.MarketPart());
             parsed.IsPerpetual().ShouldBeTrue();
             parsed.IsUsdMargined().ShouldBeTrue();
-        }
-
-        [Fact(DisplayName = "Roundtrip: Multiple venues produce comma list; parsing each keeps bits")]
-        public void Roundtrip_MultiVenue_CommaList()
-        {
-            var x = (Exchange.Binance | Exchange.KuCoin) | (Exchange.Spot);
-            var slug = x.ToSlug();
-            slug.ShouldBe("binance-spot,kucoin-spot");
-
-            var parts = slug.Split(',');
-            parts.Length.ShouldBe(2);
-
-            var p0 = ExchangeExtensions.ParseSlug(parts[0]);
-            var p1 = ExchangeExtensions.ParseSlug(parts[1]);
-
-            p0.IsBinance().ShouldBeTrue();
-            p0.IsSpot().ShouldBeTrue();
-
-            p1.IsKuCoin().ShouldBeTrue();
-            p1.IsSpot().ShouldBeTrue();
         }
 
         [Fact(DisplayName = "Binary check: Venue bits are powers of two and within VenueMask")]

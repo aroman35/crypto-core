@@ -7,7 +7,7 @@ using CryptoCore.Primitives;
 namespace CryptoConnector.Binance.Parsers;
 
 /// <summary>
-/// Zero-allocation parser for Binance depth update WS payloads (spot & futures).
+/// Zero-allocation parser for Binance depth update WS payloads (spot and futures).
 /// Produces a pooled <see cref="L2UpdatePooled"/> with deltas and Binance-like ids.
 /// </summary>
 public static class BinanceDepthParser
@@ -63,7 +63,7 @@ public static class BinanceDepthParser
                     {
                         if (reader.TokenType == JsonTokenType.Number)
                             reader.TryGetUInt64(out firstU);
-                        else if (reader.TokenType == JsonTokenType.String)
+                        _ = reader.TokenType == JsonTokenType.String &&
                             Utf8Parser.TryParse(reader.ValueSpan, out firstU, out _);
                         continue;
                     }
@@ -73,7 +73,7 @@ public static class BinanceDepthParser
                     {
                         if (reader.TokenType == JsonTokenType.Number)
                             reader.TryGetUInt64(out lastU);
-                        else if (reader.TokenType == JsonTokenType.String)
+                        _ = reader.TokenType == JsonTokenType.String &&
                             Utf8Parser.TryParse(reader.ValueSpan, out lastU, out _);
                         continue;
                     }
@@ -84,7 +84,7 @@ public static class BinanceDepthParser
                         hasPrevU = true;
                         if (reader.TokenType == JsonTokenType.Number)
                             reader.TryGetUInt64(out prevU);
-                        else if (reader.TokenType == JsonTokenType.String)
+                        _ = reader.TokenType == JsonTokenType.String &&
                             Utf8Parser.TryParse(reader.ValueSpan, out prevU, out _);
                         continue;
                     }

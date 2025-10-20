@@ -26,7 +26,7 @@ public sealed class BinanceSnapshotProvider : ISnapshotProvider
         var json = await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
 
         ulong lastUpdateId = 0;
-        var deltas = new System.Collections.Generic.List<L2Delta>(limit * 2);
+        var deltas = new List<L2Delta>(limit * 2);
 
         var reader = new Utf8JsonReader(json, isFinalBlock: true, state: default);
         while (reader.Read())
@@ -40,7 +40,7 @@ public sealed class BinanceSnapshotProvider : ISnapshotProvider
                 {
                     if (reader.TokenType == JsonTokenType.Number)
                         reader.TryGetUInt64(out lastUpdateId);
-                    else if (reader.TokenType == JsonTokenType.String)
+                    _ = reader.TokenType == JsonTokenType.String &&
                         Utf8Parser.TryParse(reader.ValueSpan, out lastUpdateId, out _);
                 }
                 else if (name.SequenceEqual("bids"u8) || name.SequenceEqual("asks"u8))
@@ -58,14 +58,14 @@ public sealed class BinanceSnapshotProvider : ISnapshotProvider
 
                         reader.Read(); // price
                         if (reader.TokenType == JsonTokenType.String)
-                            Utf8Parser.TryParse(reader.ValueSpan, out price, out _);
+                            _ = Utf8Parser.TryParse(reader.ValueSpan, out price, out _);
                         else if (reader.TokenType == JsonTokenType.Number)
                             reader.TryGetDouble(out price);
 
                         reader.Read(); // qty
                         if (reader.TokenType == JsonTokenType.String)
                         {
-                            Utf8Parser.TryParse(reader.ValueSpan, out qty, out _);
+                            _ = Utf8Parser.TryParse(reader.ValueSpan, out qty, out _);
                         }
                         else if (reader.TokenType == JsonTokenType.Number)
                             reader.TryGetDouble(out qty);

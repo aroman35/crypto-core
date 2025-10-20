@@ -1,5 +1,4 @@
 ﻿using System.Runtime.CompilerServices;
-using System.Text;
 using CryptoConnector.Binance.Common;
 using CryptoConnector.Binance.Parsers;
 using CryptoCore.MarketData;
@@ -31,7 +30,7 @@ public class L2UpdatePooledTests
     [Fact(DisplayName = "Binance parser (spot/futures) without allocations")]
     public void Binance_Parser()
     {
-        var json = Encoding.UTF8.GetBytes(@"
+        var json = @"
         {
           ""e"": ""depthUpdate"",
           ""E"": 1700000000123,
@@ -41,7 +40,7 @@ public class L2UpdatePooledTests
           ""pu"": 99,
           ""b"": [[""40000.1"", ""0.5""], [""39999.9"", ""0""]],
           ""a"": [[""40000.2"", ""1.0""]]
-        }");
+        }"u8.ToArray();
 
         var provider = new SimpleSymbolProvider();
         BinanceDepthParser.TryParseDepthUpdate(json, provider, out var pooled).ShouldBeTrue();

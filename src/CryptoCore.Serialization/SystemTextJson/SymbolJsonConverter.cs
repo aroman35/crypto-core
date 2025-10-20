@@ -1,8 +1,8 @@
-﻿namespace CryptoCore.Serialization.SystemTextJson;
-
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using CryptoCore.Primitives;
+
+namespace CryptoCore.Serialization.SystemTextJson;
 
 /// <summary>
 /// System.Text.Json converter for <see cref="Symbol"/> that serializes to a single string
@@ -38,4 +38,25 @@ public sealed class SymbolJsonConverter : JsonConverter<Symbol>
     /// </summary>
     public override void Write(Utf8JsonWriter writer, Symbol value, JsonSerializerOptions options)
         => writer.WriteStringValue(value.ToString());
+
+    /// <inheritdoc />
+    public override Symbol ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        // Reader at PropertyName or String — parse the key the same way as a value
+        var name = reader.GetString();
+        if (string.IsNullOrEmpty(name))
+            throw new JsonException("Symbol property name is empty.");
+
+        if (!Symbol.TryParse(name.AsSpan(), out var sym))
+            throw new JsonException($"Invalid symbol property name: '{name}'.");
+
+        return sym;
+    }
+
+    /// <inheritdoc />
+    public override void WriteAsPropertyName(Utf8JsonWriter writer, Symbol value, JsonSerializerOptions options)
+    {
+        // Use native symbol string for dictionary keys
+        writer.WritePropertyName(value.ToString());
+    }
 }

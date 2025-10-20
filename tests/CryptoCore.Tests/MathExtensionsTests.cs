@@ -1,4 +1,5 @@
 ﻿using CryptoCore.Extensions;
+using CryptoCore.Primitives;
 using Shouldly;
 
 namespace CryptoCore.Tests;
@@ -34,5 +35,26 @@ public class MathExtensionsTests
         // barely below epsilon should still be equal-ish
         var c = 10.0 + MathExtensions.PRECISION * 0.25;
         a.IsEquals(c).ShouldBeTrue();
+    }
+
+    [Fact(DisplayName = "MathExtensions: Greater/Lower/Equals")]
+    public void MathExtensions_Basic()
+    {
+        1.0.IsGreater(0.999999).ShouldBeTrue();
+        1.0.IsLower(1.000001).ShouldBeTrue();
+        1.0.IsEquals(1.0 + 1e-10).ShouldBeTrue();
+        1.0.IsGreaterOrEquals(1.0).ShouldBeTrue();
+        1.0.IsLowerOrEquals(1.0).ShouldBeTrue();
+    }
+
+    [Fact(DisplayName = "Side arithmetic")]
+    public void Side_Arithmetic()
+    {
+        ((int)Side.Buy).ShouldBe(1);
+        ((int)Side.Sell).ShouldBe(-1);
+
+        var qty = 5.0;
+        (qty * (int)Side.Buy).ShouldBe(5.0);
+        (qty * (int)Side.Sell).ShouldBe(-5.0);
     }
 }
