@@ -1,0 +1,5 @@
+[*.cs]
+dotnet_diagnostic.SA1200.severity = warning
+dotnet_diagnostic.SA1201.severity = warning
+dotnet_diagnostic.SA1300.severity = warning
+dotnet_style_namespace_match_folder = true:suggestion
