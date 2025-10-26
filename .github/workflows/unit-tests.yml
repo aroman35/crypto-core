@@ -29,7 +29,7 @@ jobs:
             --logger "trx;LogFileName=test_results.trx" \
             --results-directory ./test-results
       - name: Test Report
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@v2.1.1
         if: success() || failure()
         with:
           name: Unit Tests
