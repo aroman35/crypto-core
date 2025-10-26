@@ -42,7 +42,7 @@ jobs:
         if: success() || failure()
         with:
           name: Unit Tests
-          path: test-results/*.UnitTests.trx
+          path: test-results/*.trx
           reporter: dotnet-trx
           fail-on-error: true
           list-tests: 'all'
