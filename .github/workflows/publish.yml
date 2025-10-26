@@ -13,43 +13,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read
-      checks: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-      - name: Restore & Build
-        shell: bash
-        run: |
-          dotnet restore
-          dotnet build -c Release --no-restore
-      - name: Run unit tests
-        run: |
-          dotnet test -c Release --no-build \
-            --logger "trx;LogFileName=test_results.trx" \
-            --results-directory ./test-results
-      - name: Test Report
-        uses: dorny/test-reporter@v2
-        if: success() || failure()
-        with:
-          name: Unit Tests
-          path: test-results/*.trx
-          reporter: dotnet-trx
-          fail-on-error: true
-          list-tests: 'all'
-          list-suites: 'all'
-          badge-title: 'unit-tests'
-          use-actions-summary: 'true'
-          only-summary: 'false'
+    uses: aroman35/crypto-core/.github/workflows/unit-tests.yml
 
   pack-and-push:
     runs-on: ubuntu-latest
@@ -93,28 +57,6 @@ jobs:
         run: |
           dotnet restore
           dotnet build -c Release --no-restore
-
-#      - name: Test (produce TRX for UI)
-#        shell: bash
-#        run: |
-#          mkdir -p TestResults
-#          dotnet test -c Release --no-build \
-#            --logger "trx;LogFileName=test_results.trx" \
-#            --results-directory ./TestResults
-#
-#      - name: Publish Test Results to GitHub UI
-#        if: always()
-#        uses: EnricoMi/publish-unit-test-result-action@v2
-#        with:
-#          files: |
-#            TestResults/**/*.trx
-#
-#      - name: Upload raw TestResults (artifact)
-#        if: always()
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: test-results
-#          path: TestResults
 
       - name: Pack CryptoStreaming.CryptoCore
         run: dotnet pack ./src/CryptoCore/CryptoCore.csproj -c Release -o ./artifacts -p:Version="$PKG_VERSION" --no-build
