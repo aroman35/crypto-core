@@ -218,12 +218,8 @@ public sealed partial class OrderBookL2
     public IDisposable OnBookUpdated(Action<OrderBookL2> onUpdate)
     {
         ArgumentNullException.ThrowIfNull(onUpdate);
-        int id;
-        lock (_cbSync)
-        {
-            id = ++_cbNextId;
-            _bookCbs[id] = onUpdate;
-        }
+        var id = Interlocked.Increment(ref _cbNextId);
+        _bookCbs[id] = onUpdate;
         return new CallbackUnsubscriber(this, id, isTop: false);
     }
 
@@ -233,12 +229,8 @@ public sealed partial class OrderBookL2
     public IDisposable OnTopUpdated(Action<OrderBookL2> onUpdate)
     {
         ArgumentNullException.ThrowIfNull(onUpdate);
-        int id;
-        lock (_cbSync)
-        {
-            id = ++_cbNextId;
-            _topCbs[id] = onUpdate;
-        }
+        var id = Interlocked.Increment(ref _cbNextId);
+        _bookCbs[id] = onUpdate;
         return new CallbackUnsubscriber(this, id, isTop: true);
     }
 

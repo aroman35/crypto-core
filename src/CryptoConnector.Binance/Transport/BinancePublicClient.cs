@@ -176,23 +176,11 @@ public sealed class BinancePublicClient : IBinancePublicClient
                 {
                     if (Parsers.BinanceDepthParser.TryParseDepthUpdate(payload, _symbols, out var pooled))
                     {
-                        var published = transport.TryPublishDepth(pooled);
-                        if (!published)
+                        using (pooled)
                         {
-                            try
-                            {
-                                await transport.PublishDepthAsync(pooled, ct).ConfigureAwait(false);
-                            }
-                            catch
-                            {
-                                // не смогли доставить (cancelled) → во избежание утечки вернём в пул
-                                pooled.Dispose();
-                                throw;
-                            }
+                            transport.TryPublishDepth(pooled);
                         }
                     }
-
-                    continue;
                 }
             }
             finally

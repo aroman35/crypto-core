@@ -277,12 +277,12 @@ Each subscription yields an `IAsyncEnumerable<T>`. Reference impl: `ChannelMarke
 
 **Usage**
 ```csharp
-using var transport = new ChannelMarketDataTransport();
-using var client = new BinancePublicClient(new SimpleSymbolProvider());
+await using var transport = new ChannelMarketDataTransport();
+await using var client = new BinancePublicClient(new SimpleSymbolProvider());
 using var http = new HttpClient();
 var snapshots = new BinanceSnapshotProvider(http);
 
-var store = new OrderBookStore(client, transport, new OrderBookStoreOptions { SnapshotLimit = 1000 });
+var store = new OrderBookStore(client, transport, snapshots, new OrderBookStoreOptions { SnapshotLimit = 1000 });
 await store.StartAsync(CancellationToken.None);
 
 var sym = Symbol.Parse("BTCUSDT").For(Exchange.BinanceSpot);
