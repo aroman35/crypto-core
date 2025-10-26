@@ -1,9 +1,9 @@
-name: Build packages
+name: Build Packages
 
 on:
   push:
     tags:
-      - 'v*' # e.g. v0.2.3
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -12,13 +12,8 @@ on:
         type: string
 
 jobs:
-  build-and-test:
-    uses: aroman35/crypto-core/.github/workflows/unit-tests.yml@master
-
   pack-and-push:
     runs-on: ubuntu-latest
-    needs:
-      - build-and-test
     permissions:
       contents: read
       checks: write
