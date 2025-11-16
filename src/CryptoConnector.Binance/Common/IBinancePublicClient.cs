@@ -1,4 +1,5 @@
-﻿using CryptoCore.Serialization;
+﻿using CryptoCore.Primitives;
+using CryptoCore.Serialization;
 
 namespace CryptoConnector.Binance.Common;
 
@@ -8,7 +9,7 @@ namespace CryptoConnector.Binance.Common;
 public interface IBinancePublicClient : IAsyncDisposable
 {
     /// <summary>Starts WS connection and subscribes to given streams.</summary>
-    Task StartAsync(string wsUrl, string[] streamNames, IMarketDataTransport transport, CancellationToken ct = default);
+    Task StartAsync(Exchange exchange, string[] streamNames, IMarketDataTransport transport, CancellationToken ct = default);
 
     Task StartCombinedAsync(string combinedBaseUrl, string[] streamNames, IMarketDataTransport transport, CancellationToken ct = default);
 

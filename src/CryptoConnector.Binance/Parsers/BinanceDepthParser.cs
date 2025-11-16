@@ -17,7 +17,7 @@ public static class BinanceDepthParser
     /// Expects fields: "E" (event time), "s" (symbol), "U" (firstU), "u" (lastU), optional "pu" (prevLastU),
     /// "b" (bids), "a" (asks). Each price/qty is a string; parsed with <see cref="Utf8Parser"/>.
     /// </summary>
-    public static bool TryParseDepthUpdate(ReadOnlySpan<byte> jsonUtf8, ISymbolProvider symbols, out L2UpdatePooled pooled)
+    public static bool TryParseDepthUpdate(ReadOnlySpan<byte> jsonUtf8, ISymbolProvider symbols, Exchange exchange, out L2UpdatePooled pooled)
     {
         pooled = default!;
         var reader = new Utf8JsonReader(jsonUtf8, isFinalBlock: true, state: default);
@@ -151,7 +151,7 @@ public static class BinanceDepthParser
                 return false;
 
             builder.SetHeader(
-                symbol,
+                symbol.For(exchange),
                 eventTime,
                 isSnapshot: false,
                 first: firstU,

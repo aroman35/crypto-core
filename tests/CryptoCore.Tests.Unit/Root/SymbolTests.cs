@@ -2,7 +2,7 @@
 using CryptoCore.Primitives;
 using Shouldly;
 
-namespace CryptoCore.Tests.Root;
+namespace CryptoCore.Tests.Unit.Root;
 
 public class SymbolTests
 {

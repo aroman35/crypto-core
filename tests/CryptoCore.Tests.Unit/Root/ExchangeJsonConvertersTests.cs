@@ -8,7 +8,7 @@ using Shouldly;
 using JsonException = System.Text.Json.JsonException;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
-namespace CryptoCore.Tests.Root;
+namespace CryptoCore.Tests.Unit.Root;
 
 public class ExchangeJsonConvertersTests
 {

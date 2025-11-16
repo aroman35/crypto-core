@@ -53,6 +53,28 @@ jobs:
           dotnet restore
           dotnet build -c Release --no-restore
 
+      - name: Test (produce TRX for UI)
+        shell: bash
+        run: |
+          mkdir -p TestResults
+          dotnet test .\tests\CryptoCore.Tests.Unit\CryptoCore.Tests.Unit.csproj -c Release --no-build \
+            --logger "trx;LogFileName=test_results.trx" \
+            --results-directory ./TestResults
+
+      - name: Publish Test Results to GitHub UI
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: |
+            TestResults/**/*.trx
+
+      - name: Upload raw TestResults (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+
       - name: Pack CryptoStreaming.CryptoCore
         run: dotnet pack ./src/CryptoCore/CryptoCore.csproj -c Release -o ./artifacts -p:Version="$PKG_VERSION" --no-build
 

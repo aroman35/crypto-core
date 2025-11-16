@@ -17,7 +17,6 @@ public sealed class OrderBookStore : IAsyncDisposable
     private readonly IMarketDataTransport _transport;
     private readonly ISnapshotProvider _snapshots;
     private readonly OrderBookStoreOptions _options;
-    private readonly int _snapshotLimit;
 
     // per-symbol state
     private sealed class BookState
@@ -25,6 +24,7 @@ public sealed class OrderBookStore : IAsyncDisposable
         public readonly OrderBookL2 Book;
         public readonly Queue<L2UpdatePooled> Buffer = new();
         public volatile bool SnapshotReady;
+        public volatile bool FistCachedUpdateApplied;
         public ulong SnapshotLastUpdateId;
         public int MaxBuffer;
 
@@ -40,12 +40,11 @@ public sealed class OrderBookStore : IAsyncDisposable
     private IMarketDataSubscription<L2UpdatePooled>? _depthSub;
     private Task? _pumpTask;
 
-    public OrderBookStore(IBinancePublicClient client, IMarketDataTransport transport, ISnapshotProvider snapshots, int snapshotLimit = 1000, OrderBookStoreOptions? options = null)
+    public OrderBookStore(IBinancePublicClient client, IMarketDataTransport transport, ISnapshotProvider snapshots, OrderBookStoreOptions? options = null)
     {
         _client = client;
         _transport = transport;
         _snapshots = snapshots;
-        _snapshotLimit = snapshotLimit;
         _options = options ?? new OrderBookStoreOptions();
     }
 
@@ -66,33 +65,45 @@ public sealed class OrderBookStore : IAsyncDisposable
         {
             // 1) subscribe depth with retry
             var stream = BinanceStreams.Depth(symbol.ToString().ToLowerInvariant(), "100ms");
-            await WithRetryAsync(() => _client.AddSubscriptionsAsync(new[] { stream }, ct), ct).ConfigureAwait(false);
+            await WithRetryAsync(() => _client.AddSubscriptionsAsync([stream], ct), ct).ConfigureAwait(false);
 
             // 2) snapshot with retry
-            _ = Task.Run(async () =>
-            {
-                await WithRetryAsync(async () =>
+            await WithRetryAsync(async () =>
                 {
                     var snap = await _snapshots.GetOrderBookSnapshotAsync(symbol, _options.SnapshotLimit, ct).ConfigureAwait(false);
                     st.Book.Apply(snap);
                     st.SnapshotLastUpdateId = snap.LastUpdateId;
-                    st.SnapshotReady = true;
 
-                    // drain buffer (as было)
-                    while (st.Buffer.Count > 0)
+                    // drain buffer
+                    while (st.Buffer.TryDequeue(out var cashedUpdate))
                     {
-                        using var u = st.Buffer.Dequeue();
-                        if (ShouldApplyAfterSnapshot(u, st.SnapshotLastUpdateId))
+                        using (cashedUpdate)
                         {
-                            st.Book.Apply(u);
-                            if (u.LastUpdateId != 0)
-                                st.SnapshotLastUpdateId = u.LastUpdateId;
+                            var orderBookLastUpdateId = st.Book.LastUpdateId;
+                            var lastUpdateId = cashedUpdate.LastUpdateId;
+                            var firstUpdateId = cashedUpdate.FirstUpdateId;
+                            var prevUpdateId = cashedUpdate.PrevLastUpdateId;
+
+                            if (st.FistCachedUpdateApplied &&
+                                orderBookLastUpdateId == prevUpdateId)
+                            {
+                                st.Book.Apply(cashedUpdate);
+                                continue;
+                            }
+
+                            if (lastUpdateId < orderBookLastUpdateId)
+                                continue;
+
+                            if (orderBookLastUpdateId >= firstUpdateId && orderBookLastUpdateId < lastUpdateId)
+                            {
+                                st.Book.Apply(cashedUpdate);
+                                st.FistCachedUpdateApplied = true;
+                            }
                         }
                     }
+                    st.SnapshotReady = true;
                 },
-                    ct).ConfigureAwait(false);
-            },
-                ct);
+                ct).ConfigureAwait(false);
         }
 
         return st.Book;
@@ -105,7 +116,7 @@ public sealed class OrderBookStore : IAsyncDisposable
     {
         try
         {
-            var snap = await _snapshots.GetOrderBookSnapshotAsync(symbol, _snapshotLimit, ct).ConfigureAwait(false);
+            var snap = await _snapshots.GetOrderBookSnapshotAsync(symbol, _options.SnapshotLimit, ct).ConfigureAwait(false);
             st.Book.Apply(snap);
             st.SnapshotLastUpdateId = snap.LastUpdateId;
             st.SnapshotReady = true;

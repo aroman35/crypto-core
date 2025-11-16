@@ -5,7 +5,7 @@ using CryptoCore.OrderBook;
 using CryptoCore.Primitives;
 using Shouldly;
 
-namespace CryptoCore.Tests.MarketData;
+namespace CryptoCore.Tests.Unit.MarketData;
 
 public class OrderBookL2Tests
 {

@@ -115,8 +115,10 @@ public sealed partial class OrderBookL2
             return true;
         }
 
-        if (update.PrevLastUpdateId != 0 && LastUpdateId != 0 && update.PrevLastUpdateId != LastUpdateId)
-            return false;
+        // if (update.PrevLastUpdateId != 0 &&
+        //     LastUpdateId != 0 &&
+        //     (LastUpdateId < update.FirstUpdateId || LastUpdateId >= update.LastUpdateId))
+        //     return false;
 
         ApplyAll(update.Deltas.Span);
         if (update.LastUpdateId != 0)
@@ -218,12 +220,8 @@ public sealed partial class OrderBookL2
     public IDisposable OnBookUpdated(Action<OrderBookL2> onUpdate)
     {
         ArgumentNullException.ThrowIfNull(onUpdate);
-        int id;
-        lock (_cbSync)
-        {
-            id = ++_cbNextId;
-            _bookCbs[id] = onUpdate;
-        }
+        var id = Interlocked.Increment(ref _cbNextId);
+        _bookCbs[id] = onUpdate;
         return new CallbackUnsubscriber(this, id, isTop: false);
     }
 
@@ -233,12 +231,8 @@ public sealed partial class OrderBookL2
     public IDisposable OnTopUpdated(Action<OrderBookL2> onUpdate)
     {
         ArgumentNullException.ThrowIfNull(onUpdate);
-        int id;
-        lock (_cbSync)
-        {
-            id = ++_cbNextId;
-            _topCbs[id] = onUpdate;
-        }
+        var id = Interlocked.Increment(ref _cbNextId);
+        _topCbs[id] = onUpdate;
         return new CallbackUnsubscriber(this, id, isTop: true);
     }
 

@@ -2,7 +2,7 @@
 using CryptoCore.Primitives;
 using Shouldly;
 
-namespace CryptoCore.Tests;
+namespace CryptoCore.Tests.Unit;
 
 public class MathExtensionsTests
 {

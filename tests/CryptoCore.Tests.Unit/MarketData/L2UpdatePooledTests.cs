@@ -5,7 +5,7 @@ using CryptoCore.MarketData;
 using CryptoCore.Primitives;
 using Shouldly;
 
-namespace CryptoCore.Tests.MarketData;
+namespace CryptoCore.Tests.Unit.MarketData;
 
 public class L2UpdatePooledTests
 {
@@ -43,7 +43,7 @@ public class L2UpdatePooledTests
         }"u8.ToArray();
 
         var provider = new SimpleSymbolProvider();
-        BinanceDepthParser.TryParseDepthUpdate(json, provider, out var pooled).ShouldBeTrue();
+        BinanceDepthParser.TryParseDepthUpdate(json, provider, Exchange.BinanceFutures, out var pooled).ShouldBeTrue();
 
         using (pooled)
         {
