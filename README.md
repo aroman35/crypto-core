@@ -1,7 +1,7 @@
 # CryptoCore
 
 [![Version](https://img.shields.io/github/v/tag/aroman35/crypto-core?label=version)](https://github.com/aroman35/crypto-core/tags)
-[![Unit Tests](https://github.com/aroman35/crypto-core/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/aroman35/crypto-core/actions/workflows/unit-tests.yml)
+[![Unit Tests](https://github.com/aroman35/crypto-core/actions/workflows/run-unit-tests.yml/badge.svg)](https://github.com/aroman35/crypto-core/actions/workflows/run-unit-tests.yml)
 [![Package](https://github.com/aroman35/crypto-core/actions/workflows/publish.yml/badge.svg)](https://github.com/aroman35/crypto-core/actions/workflows/publish.yml)
 
 > **Current version:** from repo tags

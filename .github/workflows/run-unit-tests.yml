@@ -44,16 +44,16 @@ jobs:
             --logger "trx;LogFileName=test_results.trx" \
             --results-directory ./TestResults
 
-      - name: Publish Test Results to GitHub UI
-        if: always()
-        uses: EnricoMi/publish-unit-test-result-action@v2
+      - name: Test Report
+        uses: dorny/test-reporter@v2.1.1
+        if: success() || failure()
         with:
-          files: |
-            TestResults/**/*.trx
-
-      - name: Upload raw TestResults (artifact)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: TestResults
+          name: Unit Tests
+          path: test-results/*.trx
+          reporter: dotnet-trx
+          fail-on-error: true
+          list-tests: 'all'
+          list-suites: 'all'
+          badge-title: 'unit-tests'
+          use-actions-summary: 'true'
+          only-summary: 'false'
