@@ -39,10 +39,9 @@ jobs:
       - name: Test (produce TRX for UI)
         shell: bash
         run: |
-          mkdir -p TestResults
           dotnet test tests/CryptoCore.Tests.Unit/CryptoCore.Tests.Unit.csproj -c Release --no-build \
             --logger "trx;LogFileName=test_results.trx" \
-            --results-directory ./TestResults
+            --results-directory ./test-results
 
       - name: Test Report
         uses: dorny/test-reporter@v2.1.1
