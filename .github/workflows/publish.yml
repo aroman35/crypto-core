@@ -1,9 +1,9 @@
-name: publish
+name: Build Packages
 
 on:
   push:
     tags:
-      - 'v*' # e.g. v0.2.3
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -21,7 +21,6 @@ jobs:
     env:
       DOTNET_NOLOGO: true
       DOTNET_CLI_TELEMETRY_OPTOUT: true
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
