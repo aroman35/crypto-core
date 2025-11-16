@@ -1,4 +1,6 @@
-﻿namespace CryptoConnector.Binance.Common;
+﻿using CryptoCore.Primitives;
+
+namespace CryptoConnector.Binance.Common;
 
 /// <summary>
 /// Known public WebSocket endpoints and helpers.
@@ -23,4 +25,14 @@ public static class BinanceStreams
     /// Trade stream name (per trade, не aggTrade): e.g. "btcusdt@trade".
     /// </summary>
     public static string Trades(string symbolLower) => $"{symbolLower}@trade";
+
+    public static string GetBaseUrl(Exchange exchange)
+    {
+        return exchange switch
+        {
+            Exchange.BinanceSpot => SpotWs,
+            Exchange.BinanceFutures => FuturesUsdM,
+            _ => throw new InvalidOperationException($"Websocket stream is not supported for {exchange} exchange")
+        };
+    }
 }

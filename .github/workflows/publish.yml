@@ -58,7 +58,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p TestResults
-          dotnet test -c Release --no-build \
+          dotnet test .\tests\CryptoCore.Tests.Unit\CryptoCore.Tests.Unit.csproj -c Release --no-build \
             --logger "trx;LogFileName=test_results.trx" \
             --results-directory ./TestResults
 

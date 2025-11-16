@@ -3,7 +3,7 @@ using CryptoCore.MarketData;
 using CryptoCore.Primitives;
 using Shouldly;
 
-namespace CryptoCore.Tests.MarketData;
+namespace CryptoCore.Tests.Unit.MarketData;
 
 public class PublicTradeTests
 {

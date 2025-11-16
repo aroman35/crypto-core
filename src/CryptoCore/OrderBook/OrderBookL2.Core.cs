@@ -115,8 +115,10 @@ public sealed partial class OrderBookL2
             return true;
         }
 
-        if (update.PrevLastUpdateId != 0 && LastUpdateId != 0 && update.PrevLastUpdateId != LastUpdateId)
-            return false;
+        // if (update.PrevLastUpdateId != 0 &&
+        //     LastUpdateId != 0 &&
+        //     (LastUpdateId < update.FirstUpdateId || LastUpdateId >= update.LastUpdateId))
+        //     return false;
 
         ApplyAll(update.Deltas.Span);
         if (update.LastUpdateId != 0)
@@ -230,7 +232,7 @@ public sealed partial class OrderBookL2
     {
         ArgumentNullException.ThrowIfNull(onUpdate);
         var id = Interlocked.Increment(ref _cbNextId);
-        _bookCbs[id] = onUpdate;
+        _topCbs[id] = onUpdate;
         return new CallbackUnsubscriber(this, id, isTop: true);
     }
 

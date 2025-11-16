@@ -5,7 +5,7 @@ using CryptoCore.Primitives;
 using Newtonsoft.Json;
 using Shouldly;
 
-namespace CryptoCore.Tests.Root;
+namespace CryptoCore.Tests.Unit.Root;
 
 public class AssetJsonConvertersTests
     {

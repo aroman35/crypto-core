@@ -6,7 +6,7 @@ using CryptoCore.OrderBook;
 using CryptoCore.Primitives;
 using Shouldly;
 
-namespace CryptoCore.Tests.MarketData;
+namespace CryptoCore.Tests.Unit.MarketData;
 
 public class OrderBookPooledApplyTests
 {
@@ -66,7 +66,7 @@ public class OrderBookPooledApplyTests
         var book = new OrderBookL2(Symbol.Parse("BTCUSDT").For(Exchange.BinanceSpot));
         var provider = new SimpleSymbolProvider();
 
-        BinanceDepthParser.TryParseDepthUpdate(json, provider, out var pooled).ShouldBeTrue();
+        BinanceDepthParser.TryParseDepthUpdate(json, provider, Exchange.BinanceSpot, out var pooled).ShouldBeTrue();
         using (pooled)
         {
             // apply pooled deltas directly

@@ -24,6 +24,7 @@ public sealed class OrderBookStore : IAsyncDisposable
         public readonly OrderBookL2 Book;
         public readonly Queue<L2UpdatePooled> Buffer = new();
         public volatile bool SnapshotReady;
+        public volatile bool FistCachedUpdateApplied;
         public ulong SnapshotLastUpdateId;
         public int MaxBuffer;
 
@@ -72,19 +73,35 @@ public sealed class OrderBookStore : IAsyncDisposable
                     var snap = await _snapshots.GetOrderBookSnapshotAsync(symbol, _options.SnapshotLimit, ct).ConfigureAwait(false);
                     st.Book.Apply(snap);
                     st.SnapshotLastUpdateId = snap.LastUpdateId;
-                    st.SnapshotReady = true;
 
                     // drain buffer
-                    while (st.Buffer.Count > 0)
+                    while (st.Buffer.TryDequeue(out var cashedUpdate))
                     {
-                        using var u = st.Buffer.Dequeue();
-                        if (ShouldApplyAfterSnapshot(u, st.SnapshotLastUpdateId))
+                        using (cashedUpdate)
                         {
-                            st.Book.Apply(u);
-                            if (u.LastUpdateId != 0)
-                                st.SnapshotLastUpdateId = u.LastUpdateId;
+                            var orderBookLastUpdateId = st.Book.LastUpdateId;
+                            var lastUpdateId = cashedUpdate.LastUpdateId;
+                            var firstUpdateId = cashedUpdate.FirstUpdateId;
+                            var prevUpdateId = cashedUpdate.PrevLastUpdateId;
+
+                            if (st.FistCachedUpdateApplied &&
+                                orderBookLastUpdateId == prevUpdateId)
+                            {
+                                st.Book.Apply(cashedUpdate);
+                                continue;
+                            }
+
+                            if (lastUpdateId < orderBookLastUpdateId)
+                                continue;
+
+                            if (orderBookLastUpdateId >= firstUpdateId && orderBookLastUpdateId < lastUpdateId)
+                            {
+                                st.Book.Apply(cashedUpdate);
+                                st.FistCachedUpdateApplied = true;
+                            }
                         }
                     }
+                    st.SnapshotReady = true;
                 },
                 ct).ConfigureAwait(false);
         }

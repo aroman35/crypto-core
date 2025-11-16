@@ -7,7 +7,7 @@ using Newtonsoft.Json;
 using Shouldly;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
-namespace CryptoCore.Tests.Root;
+namespace CryptoCore.Tests.Unit.Root;
 
 public sealed class SymbolJsonConvertersTests
 {

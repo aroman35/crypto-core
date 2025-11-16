@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading.Channels;
 using CryptoConnector.Binance.Common;
 using CryptoCore.MarketData;
+using CryptoCore.Primitives;
 using CryptoCore.Serialization;
 
 namespace CryptoConnector.Binance.Transport;
@@ -18,6 +19,7 @@ public sealed class BinancePublicClient : IBinancePublicClient
     private readonly ISymbolProvider _symbols;
     private readonly Channel<byte[]> _inbox;
     private readonly HashSet<string> _streams = new(StringComparer.Ordinal);
+    private Exchange _exchange;
     private ClientWebSocket? _ws;
     private IMarketDataTransport? _transport;
     private bool _combinedMode;
@@ -32,17 +34,18 @@ public sealed class BinancePublicClient : IBinancePublicClient
     }
 
     /// <inheritdoc/>
-    public async Task StartAsync(string wsUrl, string[] streamNames, IMarketDataTransport transport, CancellationToken ct = default)
+    public async Task StartAsync(Exchange exchange, string[] streamNames, IMarketDataTransport transport, CancellationToken ct = default)
     {
         _combinedMode = false;
-        _baseUrl = wsUrl;
+        _exchange = exchange;
+        _baseUrl = BinanceStreams.GetBaseUrl(_exchange);
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
         _streams.Clear();
         foreach (var s in streamNames)
             _streams.Add(s);
 
         _ws = new ClientWebSocket();
-        await _ws.ConnectAsync(new Uri(wsUrl), ct).ConfigureAwait(false);
+        await _ws.ConnectAsync(new Uri(_baseUrl), ct).ConfigureAwait(false);
 
         if (_streams.Count > 0)
         {
@@ -174,12 +177,9 @@ public sealed class BinancePublicClient : IBinancePublicClient
                 if ((!type.IsEmpty && type.SequenceEqual("depthUpdate"u8)) ||
                     (!streamName.IsEmpty && streamName.IndexOf((byte)'@') > 0 && streamName.IndexOf("depth"u8) >= 0))
                 {
-                    if (Parsers.BinanceDepthParser.TryParseDepthUpdate(payload, _symbols, out var pooled))
+                    if (Parsers.BinanceDepthParser.TryParseDepthUpdate(payload, _symbols, _exchange, out var pooled))
                     {
-                        using (pooled)
-                        {
-                            transport.TryPublishDepth(pooled);
-                        }
+                        transport.TryPublishDepth(pooled);
                     }
                 }
             }

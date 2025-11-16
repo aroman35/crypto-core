@@ -3,7 +3,7 @@ using CryptoCore.Primitives;
 using CryptoCore.Serialization.SystemTextJson;
 using Shouldly;
 
-namespace CryptoCore.Tests;
+namespace CryptoCore.Tests.Unit;
 
 public sealed class SystemTextJsonDictionaryKeyTests
 {
