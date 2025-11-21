@@ -9,7 +9,7 @@ namespace CryptoStreaming;
 /// Channel-based transport with subscription handles. Depth (L2) supports a single subscriber (pooled ownership),
 /// trades support multiple subscribers (fan-out).
 /// </summary>
-public sealed class ChannelMarketDataTransport : IMarketDataTransport, IAsyncDisposable
+public sealed class ChannelMarketDataTransport : IMarketDataTransport
 {
     // --- Trades (multi-subscriber fan-out) ---
     private readonly object _tradeSync = new();
