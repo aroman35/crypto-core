@@ -6,7 +6,7 @@ namespace CryptoCore.Serialization;
 /// Transport abstraction between connectors and consumers.
 /// Connectors publish parsed messages; consumers subscribe and enumerate async streams.
 /// </summary>
-public interface IMarketDataTransport
+public interface IMarketDataTransport : IAsyncDisposable
 {
     /// <summary>
     /// Subscribe to depth (L2) updates. Only a single subscriber is allowed for pooled L2 to preserve zero allocations

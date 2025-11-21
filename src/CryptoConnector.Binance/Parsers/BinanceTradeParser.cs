@@ -13,7 +13,7 @@ namespace CryptoConnector.Binance.Parsers;
 public static class BinanceTradeParser
 {
     /// <summary>Parses @trade message into <see cref="PublicTrade"/>.</summary>
-    public static bool TryParseTrade(ReadOnlySpan<byte> jsonUtf8, ISymbolProvider symbols, out PublicTrade trade)
+    public static bool TryParseTrade(ReadOnlySpan<byte> jsonUtf8, ISymbolProvider symbols, Exchange exchange, out PublicTrade trade)
     {
         trade = default;
         var reader = new Utf8JsonReader(jsonUtf8, isFinalBlock: true, state: default);
@@ -103,7 +103,7 @@ public static class BinanceTradeParser
         // buyer-makes? В Binance "m" = isBuyerMaker (true -> buy was maker -> seller was aggressor).
         flags |= isBuyerMaker ? PublicTrade.TradeAttributes.AggressorSell : PublicTrade.TradeAttributes.AggressorBuy;
 
-        trade = PublicTrade.Create(symbol, tradeId, tradeTime != 0 ? tradeTime : eventTime, price, qty, flags);
+        trade = PublicTrade.Create(symbol.For(exchange), tradeId, tradeTime != 0 ? tradeTime : eventTime, price, qty, flags);
         return true;
     }
 }

@@ -100,7 +100,7 @@ public sealed partial class OrderBookL2
     /// If <see cref="L2UpdatePooled.PrevLastUpdateId"/> is non-zero, checks Binance-like continuity.
     /// Returns <c>false</c> when the update was rejected by continuity rule.
     /// </summary>
-    public bool Apply(in L2UpdatePooled update)
+    public bool Apply(in L2UpdatePooled update, bool force = false)
     {
         if (update.Symbol != Symbol)
             throw new InvalidOperationException("Update symbol mismatch.");
@@ -115,10 +115,13 @@ public sealed partial class OrderBookL2
             return true;
         }
 
-        // if (update.PrevLastUpdateId != 0 &&
-        //     LastUpdateId != 0 &&
-        //     (LastUpdateId < update.FirstUpdateId || LastUpdateId >= update.LastUpdateId))
-        //     return false;
+        if (!force &&
+            update.PrevLastUpdateId != 0 &&
+            LastUpdateId != 0 &&
+            update.PrevLastUpdateId != LastUpdateId)
+        {
+            return false;
+        }
 
         ApplyAll(update.Deltas.Span);
         if (update.LastUpdateId != 0)

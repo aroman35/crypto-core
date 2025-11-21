@@ -1,6 +1,4 @@
-﻿using System.Buffers;
-using System.Net.WebSockets;
-using System.Text;
+﻿using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Threading.Channels;
 using CryptoConnector.Binance.Common;
@@ -16,106 +14,51 @@ namespace CryptoConnector.Binance.Transport;
 /// </summary>
 public sealed class BinancePublicClient : IBinancePublicClient
 {
+    #region LimitationConstants
+
+    private const int StreamsMaxCount = 1024;
+    private const int MaxOutcomingMessagesPerSecond = 10;
+    private const int ConnectionTimeToLiveSeconds = 24 * 60 * 60;
+
+    #endregion
+
     private readonly ISymbolProvider _symbols;
     private readonly Channel<byte[]> _inbox;
-    private readonly HashSet<string> _streams = new(StringComparer.Ordinal);
-    private Exchange _exchange;
-    private ClientWebSocket? _ws;
-    private IMarketDataTransport? _transport;
-    private bool _combinedMode;
-    private string? _baseUrl;
+    private readonly IMarketDataTransport? _transport;
+    private readonly Exchange _exchange;
+    private readonly IBinanceWebSocketFactory _binanceWebSocketFactory;
+    private readonly TimeProvider _clock;
+    private readonly ConcurrentDictionary<Guid, IBinanceWebSocketConnection> _connections = new();
+    private volatile bool _isConnected;
+    private Task? _parseLoopTask;
 
     /// <summary>Create client with provided symbol provider.</summary>
-    public BinancePublicClient(ISymbolProvider symbols)
+    public BinancePublicClient(
+        ISymbolProvider symbols,
+        IMarketDataTransport transport,
+        Exchange exchange,
+        IBinanceWebSocketFactory binanceWebSocketFactory,
+        TimeProvider clock)
     {
+        _transport = transport;
         _symbols = symbols;
+        _exchange = exchange;
+        _binanceWebSocketFactory = binanceWebSocketFactory;
+        _clock = clock;
         _inbox = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(256)
             { SingleWriter = true, SingleReader = true });
     }
 
     /// <inheritdoc/>
-    public async Task StartAsync(Exchange exchange, string[] streamNames, IMarketDataTransport transport, CancellationToken ct = default)
+    public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        _combinedMode = false;
-        _exchange = exchange;
-        _baseUrl = BinanceStreams.GetBaseUrl(_exchange);
-        _transport = transport ?? throw new ArgumentNullException(nameof(transport));
-        _streams.Clear();
-        foreach (var s in streamNames)
-            _streams.Add(s);
+        if (_isConnected)
+            return;
 
-        _ws = new ClientWebSocket();
-        await _ws.ConnectAsync(new Uri(_baseUrl), ct).ConfigureAwait(false);
-
-        if (_streams.Count > 0)
-        {
-            var sub = BuildSubscribe(_streams.ToArray());
-            var subBytes = Encoding.UTF8.GetBytes(sub);
-            await _ws.SendAsync(subBytes, WebSocketMessageType.Text, endOfMessage: true, ct).ConfigureAwait(false);
-        }
-
-        _ = Task.Run(() => ReceiveLoop(ct), ct);
-        _ = Task.Run(() => ParseLoop(ct), ct);
-    }
-
-    /// <inheritdoc/>
-    public async Task StartCombinedAsync(string combinedBaseUrl, string[] streamNames, IMarketDataTransport transport, CancellationToken ct = default)
-    {
-        _combinedMode = true;
-        _transport = transport ?? throw new ArgumentNullException(nameof(transport));
-        _baseUrl = combinedBaseUrl.TrimEnd('/'); // e.g. wss://stream.binance.com:9443/stream?streams=
-        _streams.Clear();
-        foreach (var s in streamNames)
-            _streams.Add(s);
-
-        var url = BuildCombinedUrl(_baseUrl!, _streams);
-        _ws = new ClientWebSocket();
-        await _ws.ConnectAsync(new Uri(url), ct).ConfigureAwait(false);
-
-        _ = Task.Run(() => ReceiveLoop(ct), ct);
-        _ = Task.Run(() => ParseLoop(ct), ct);
-    }
-
-    private async Task ReceiveLoop(CancellationToken ct)
-    {
-        var ws = _ws!;
-        var buffer = ArrayPool<byte>.Shared.Rent(1 << 14);
-
-        try
-        {
-            while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
-            {
-                var mem = new ArraySegment<byte>(buffer);
-                var result = await ws.ReceiveAsync(mem, ct).ConfigureAwait(false);
-                if (result.MessageType == WebSocketMessageType.Close)
-                    break;
-
-                var count = result.Count;
-                while (!result.EndOfMessage)
-                {
-                    if (count >= buffer.Length)
-                    {
-                        var old = buffer;
-                        buffer = ArrayPool<byte>.Shared.Rent(old.Length * 2);
-                        Array.Copy(old, buffer, old.Length);
-                        ArrayPool<byte>.Shared.Return(old);
-                    }
-
-                    var next = new ArraySegment<byte>(buffer, count, buffer.Length - count);
-                    result = await ws.ReceiveAsync(next, ct).ConfigureAwait(false);
-                    count += result.Count;
-                }
-
-                var msg = new byte[count];
-                Buffer.BlockCopy(buffer, 0, msg, 0, count);
-                await _inbox.Writer.WriteAsync(msg, ct).ConfigureAwait(false);
-            }
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-            _inbox.Writer.TryComplete();
-        }
+        var client = await _binanceWebSocketFactory.GetConnection(_exchange, _inbox.Writer, cancellationToken);
+        _connections.TryAdd(client.Id, client);
+        _parseLoopTask = Task.Run(() => ParseLoop(cancellationToken), cancellationToken);
+        _isConnected = true;
     }
 
     private async Task ParseLoop(CancellationToken ct)
@@ -164,7 +107,7 @@ public sealed class BinancePublicClient : IBinancePublicClient
                 if ((!type.IsEmpty && type.SequenceEqual("trade"u8)) ||
                     (!streamName.IsEmpty && streamName.IndexOf((byte)'@') > 0 && streamName.EndsWith("trade"u8)))
                 {
-                    if (Parsers.BinanceTradeParser.TryParseTrade(payload, _symbols, out var t))
+                    if (Parsers.BinanceTradeParser.TryParseTrade(payload, _symbols, _exchange, out var t))
                     {
                         if (!transport.TryPublishTrade(t))
                             await transport.PublishTradeAsync(t, ct).ConfigureAwait(false);
@@ -183,96 +126,47 @@ public sealed class BinancePublicClient : IBinancePublicClient
                     }
                 }
             }
-            finally
-            {
-                // msg array — отдаём GC (копия на каждый кадр)
-            }
-        }
-    }
-
-    private static string BuildSubscribe(string[] streams)
-        => $"{{\"method\":\"SUBSCRIBE\",\"params\":[{string.Join(',', streams.Select(s => $"\"{s}\""))}],\"id\":1}}";
-
-    private static string BuildUnsubscribe(string[] streams)
-        => $"{{\"method\":\"UNSUBSCRIBE\",\"params\":[{string.Join(',', streams.Select(s => $"\"{s}\""))}],\"id\":1}}";
-
-    private static string BuildCombinedUrl(string baseUrl, IEnumerable<string> names)
-        => $"{baseUrl}/stream?streams={string.Join('/', names)}";
-
-    /// <inheritdoc />
-    public async Task AddSubscriptionsAsync(string[] streamNames, CancellationToken ct = default)
-    {
-        foreach (var s in streamNames)
-            _streams.Add(s);
-
-        if (_combinedMode)
-        {
-            await ReconnectCombinedAsync(ct).ConfigureAwait(false);
-        }
-        else
-        {
-            var msg = Encoding.UTF8.GetBytes(BuildSubscribe(streamNames));
-            await _ws!.SendAsync(msg, WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
-        }
-    }
-
-    private async Task ReconnectCombinedAsync(CancellationToken ct)
-    {
-        // закрываем и открываем с новым списком стримов
-        if (_ws is { } ws)
-        {
-            try
-            {
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "reconnect", ct);
-            }
             catch
             {
                 // ignored
             }
-
-            ws.Dispose();
         }
-        var url = BuildCombinedUrl(_baseUrl!, _streams);
-        _ws = new ClientWebSocket();
-        await _ws.ConnectAsync(new Uri(url), ct).ConfigureAwait(false);
-
-        // перезапускаем лупы при необходимости (упрощённо можно оставить прежние, если они сами завершатся от Close)
-        _ = Task.Run(() => ReceiveLoop(ct), ct);
-        _ = Task.Run(() => ParseLoop(ct), ct);
     }
 
     /// <inheritdoc />
-    public async Task RemoveSubscriptionsAsync(string[] streamNames, CancellationToken ct = default)
+    public async Task AddSubscriptionsAsync(string[] streamNames, CancellationToken cancellationToken = default)
     {
-        foreach (var s in streamNames)
-            _streams.Remove(s);
+        var lastKey = _connections.Keys.Last();
+        if (_connections.TryGetValue(lastKey, out var client))
+        {
+            if (client.StreamsCount + streamNames.Length < StreamsMaxCount)
+            {
+                await client.AddSubscriptionsAsync(streamNames, cancellationToken);
+                return;
+            }
+        }
 
-        if (_combinedMode)
-        {
-            await ReconnectCombinedAsync(ct).ConfigureAwait(false);
-        }
-        else
-        {
-            var msg = Encoding.UTF8.GetBytes(BuildUnsubscribe(streamNames));
-            await _ws!.SendAsync(msg, WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
-        }
+        client = await _binanceWebSocketFactory.GetConnection(_exchange, _inbox.Writer, cancellationToken);
+        await client.AddSubscriptionsAsync(streamNames, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task RemoveSubscriptionsAsync(string[] streamNames, CancellationToken cancellationToken = default)
+    {
+        // TODO: match request ids of a subscribe message
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
-        if (_ws is { } ws)
+        foreach (var id in _connections.Keys.ToArray())
         {
-            try
-            {
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None);
-            }
-            catch
-            {
-                /* ignore */
-            }
-
-            ws.Dispose();
+            if (_connections.TryRemove(id, out var client))
+                await client.DisposeAsync();
         }
+
+        if (_parseLoopTask is not null)
+            await _parseLoopTask;
     }
 }
