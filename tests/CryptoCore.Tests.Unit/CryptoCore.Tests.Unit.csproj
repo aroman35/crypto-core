@@ -33,6 +33,7 @@
     <ItemGroup>
       <ProjectReference Include="..\..\src\CryptoConnector.Binance\CryptoConnector.Binance.csproj" />
       <ProjectReference Include="..\..\src\CryptoCore.Serialization\CryptoCore.Serialization.csproj" />
+      <ProjectReference Include="..\..\src\CryptoCore.Storage\CryptoCore.Storage.csproj" />
       <ProjectReference Include="..\..\src\CryptoCore\CryptoCore.csproj" />
     </ItemGroup>
 
