@@ -132,4 +132,22 @@ public static class StorageExtensions
             price,
             quantity);
     }
+
+    /// <summary>
+    /// Returns true if this packed record contains an L2 book update.
+    /// </summary>
+    public static bool IsL2Update(this PackedMarketData24 item)
+        => MarketDataFlags.IsL2Update(item.Flags);
+
+    /// <summary>
+    /// Returns true if this packed record contains a trade event.
+    /// </summary>
+    public static bool IsTrade(this PackedMarketData24 item)
+        => MarketDataFlags.IsTrade(item.Flags);
+
+    /// <summary>
+    /// Returns the message type encoded in the <see cref="PackedMarketData24.Flags"/> field.
+    /// </summary>
+    public static MarketDataMessageType GetMessageType(this PackedMarketData24 item)
+        => MarketDataFlags.GetMessageType(item.Flags);
 }

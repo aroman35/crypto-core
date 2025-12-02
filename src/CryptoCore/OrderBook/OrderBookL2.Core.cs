@@ -24,8 +24,8 @@ public sealed partial class OrderBookL2
     /// <summary>Number of price levels on ask side.</summary>
     public int AskLevels => _asksSorted.Count;
 
-    private readonly Dictionary<double, double> _bids = new();
-    private readonly Dictionary<double, double> _asks = new();
+    // private readonly Dictionary<double, double> _bids = new();
+    // private readonly Dictionary<double, double> _asks = new();
 
     private readonly SortedDictionary<double, double> _bidsSorted;
     private readonly SortedDictionary<double, double> _asksSorted;
@@ -55,8 +55,6 @@ public sealed partial class OrderBookL2
     /// <summary>Clears the book contents.</summary>
     public void Clear()
     {
-        _bids.Clear();
-        _asks.Clear();
         _bidsSorted.Clear();
         _asksSorted.Clear();
         LastUpdateId = 0;
@@ -131,15 +129,36 @@ public sealed partial class OrderBookL2
         return true;
     }
 
+    public (double Price, double Qty) CachedBestBid => (_lastBestBidPx, _lastBestBidQty);
+    public (double Price, double Qty) CachedBestAsk => (_lastBestAskPx, _lastBestAskQty);
+
     /// <summary>Returns current best bid (price, qty) or (0,0) when empty.</summary>
     public (double Price, double Qty) BestBid()
-        => _bidsSorted.Count == 0
-            ? (0, 0)
-            : (_bidsSorted.Keys.MinBy(_ => -_), _bidsSorted[_bidsSorted.Keys.MinBy(_ => -_)]);
+    {
+        if (_bidsSorted.Count == 0)
+            return (0, 0);
+
+        using var e = _bidsSorted.GetEnumerator();
+        if (!e.MoveNext())
+            return (0, 0);
+
+        var kv = e.Current;
+        return (kv.Key, kv.Value);
+    }
 
     /// <summary>Returns current best ask (price, qty) or (0,0) when empty.</summary>
     public (double Price, double Qty) BestAsk()
-        => _asksSorted.Count == 0 ? (0, 0) : (_asksSorted.Keys.Min(), _asksSorted[_asksSorted.Keys.Min()]);
+    {
+        if (_asksSorted.Count == 0)
+            return (0, 0);
+
+        using var e = _asksSorted.GetEnumerator();
+        if (!e.MoveNext())
+            return (0, 0);
+
+        var kv = e.Current;
+        return (kv.Key, kv.Value);
+    }
 
     /// <summary>Enumerates bids (desc) up to <paramref name="maxLevels"/> (0 → no limit).</summary>
     public IEnumerable<(double Price, double Qty)> EnumerateBids(int maxLevels = 0)
@@ -173,42 +192,36 @@ public sealed partial class OrderBookL2
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void ApplyOne(in L2Delta d)
+    private void ApplyOne(in L2Delta delta)
     {
-        if (d.Side == Side.Buy)
+        if (delta.Side == Side.Buy)
         {
-            if (d.IsRemove || d.Quantity.IsEquals(0.0))
+            if (delta.IsRemove || delta.Quantity.IsEquals(0.0))
             {
-                if (_bids.Remove(d.Price))
+                if (_bidsSorted.Remove(delta.Price, out var bidPrevQty))
                 {
-                    var prevQty = _bidsSorted[d.Price];
-                    _bidsSorted.Remove(d.Price);
-                    OnLevelRemoved(Side.Buy, d.Price, prevQty);
+                    OnLevelRemoved(Side.Buy, delta.Price, bidPrevQty);
                 }
             }
             else
             {
-                _bids[d.Price] = d.Quantity;
-                _bidsSorted[d.Price] = d.Quantity;
-                OnLevelUpserted(Side.Buy, d.Price, d.Quantity);
+                _bidsSorted[delta.Price] = delta.Quantity;
+                OnLevelUpserted(Side.Buy, delta.Price, delta.Quantity);
             }
         }
-        else if (d.Side == Side.Sell)
+        else if (delta.Side == Side.Sell)
         {
-            if (d.IsRemove || d.Quantity.IsEquals(0.0))
+            if (delta.IsRemove || delta.Quantity.IsEquals(0.0))
             {
-                if (_asks.Remove(d.Price))
+                if (_asksSorted.Remove(delta.Price, out var askPrevQty))
                 {
-                    var prevQty = _asksSorted[d.Price];
-                    _asksSorted.Remove(d.Price);
-                    OnLevelRemoved(Side.Sell, d.Price, prevQty);
+                    OnLevelRemoved(Side.Sell, delta.Price, askPrevQty);
                 }
             }
             else
             {
-                _asks[d.Price] = d.Quantity;
-                _asksSorted[d.Price] = d.Quantity;
-                OnLevelUpserted(Side.Sell, d.Price, d.Quantity);
+                _asksSorted[delta.Price] = delta.Quantity;
+                OnLevelUpserted(Side.Sell, delta.Price, delta.Quantity);
             }
         }
     }
@@ -249,6 +262,10 @@ public sealed partial class OrderBookL2
 
     private void NotifyAfterApply((double BbPx, double BbQty, double BaPx, double BaQty) before)
     {
+        // быстрый early-exit: в твоём тесте подписчик есть, но это всё равно дешёво
+        if (_topCbs.Count == 0 && _bookCbs.Count == 0)
+            return;
+
         var (bbPx, bbQty) = BestBid();
         var (baPx, baQty) = BestAsk();
 
@@ -256,42 +273,40 @@ public sealed partial class OrderBookL2
             !bbPx.IsEquals(before.BbPx) || !bbQty.IsEquals(before.BbQty) ||
             !baPx.IsEquals(before.BaPx) || !baQty.IsEquals(before.BaQty);
 
-        // обновим кэш
         _lastBestBidPx = bbPx;
         _lastBestBidQty = bbQty;
         _lastBestAskPx = baPx;
         _lastBestAskQty = baQty;
 
-        // уведомления: сперва top (если изменился), потом book
         if (topChanged)
         {
-            Action<OrderBookL2>[] copy;
             lock (_cbSync)
-                copy = _topCbs.Values.ToArray();
-            foreach (var cb in copy)
             {
-                try
+                foreach (var cb in _topCbs.Values)
                 {
-                    cb(this);
-                }
-                catch
-                { /* swallow */
+                    try
+                    {
+                        cb(this);
+                    }
+                    catch
+                    {
+                        // Ignored
+                    }
                 }
             }
         }
 
+        lock (_cbSync)
         {
-            Action<OrderBookL2>[] copy;
-            lock (_cbSync)
-                copy = _bookCbs.Values.ToArray();
-            foreach (var cb in copy)
+            foreach (var cb in _bookCbs.Values)
             {
                 try
                 {
                     cb(this);
                 }
                 catch
-                { /* swallow */
+                {
+                    // Ignored
                 }
             }
         }

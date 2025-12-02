@@ -53,32 +53,10 @@ jobs:
           dotnet restore
           dotnet build -c Release --no-restore
 
-#      - name: Test (produce TRX for UI)
-#        shell: bash
-#        run: |
-#          mkdir -p TestResults
-#          dotnet test tests/CryptoCore.Tests.Unit/CryptoCore.Tests.Unit.csproj -c Release --no-build \
-#            --logger "trx;LogFileName=test_results.trx" \
-#            --results-directory ./TestResults
-#
-#      - name: Publish Test Results to GitHub UI
-#        if: always()
-#        uses: EnricoMi/publish-unit-test-result-action@v2
-#        with:
-#          files: |
-#            TestResults/**/*.trx
-#
-#      - name: Upload raw TestResults (artifact)
-#        if: always()
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: test-results
-#          path: TestResults
-
-      - name: Pack CryptoStreaming.CryptoCore
+      - name: Pack CryptoCore.CryptoCore
         run: dotnet pack ./src/CryptoCore/CryptoCore.csproj -c Release -o ./artifacts -p:Version="$PKG_VERSION" --no-build
 
-      - name: Pack CryptoStreaming.Abstractions
+      - name: Pack CryptoCore.Abstractions
         run: dotnet pack ./src/CryptoStreaming.Abstractions/CryptoStreaming.Abstractions.csproj -c Release -o ./artifacts -p:Version="$PKG_VERSION" --no-build
 
       - name: Pack CryptoStreaming.Channels
@@ -86,6 +64,12 @@ jobs:
 
       - name: Pack CryptoConnector.Binance
         run: dotnet pack ./src/CryptoConnector.Binance/CryptoConnector.Binance.csproj -c Release -o ./artifacts -p:Version="$PKG_VERSION" --no-build
+
+      - name: Pack CryptoCore.Storage
+        run: dotnet pack ./src/CryptoCore.Storage/CryptoCore.Storage.csproj -c Release -o ./artifacts -p:Version="$PKG_VERSION" --no-build
+
+      - name: Pack CryptoCore.Analytics
+        run: dotnet pack ./src/CryptoCore.Analytics/CryptoCore.Analytics.csproj -c Release -o ./artifacts -p:Version="$PKG_VERSION" --no-build
 
       - name: Prepare YC service account key
         shell: bash

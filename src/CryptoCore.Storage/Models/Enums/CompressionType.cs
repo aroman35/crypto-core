@@ -7,7 +7,7 @@
 public enum CompressionType
 {
     /// <summary>No compression, raw binary payload.</summary>
-    None = 0,
+    NoCompression = 0,
 
     /// <summary>GZip compression.</summary>
     GZip = 1,
@@ -16,5 +16,8 @@ public enum CompressionType
     Brotli = 2,
 
     /// <summary>LZ4 or compatible fast compression.</summary>
-    Lz4 = 3
+    Lz4 = 3,
+
+    /// <summary>Deflate</summary>
+    Deflate = 4
 }

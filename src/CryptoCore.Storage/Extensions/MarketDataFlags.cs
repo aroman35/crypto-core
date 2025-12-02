@@ -12,7 +12,7 @@ public static class MarketDataFlags
 {
     // Layout:
     // bits  0-1 : message type (MarketDataMessageType)
-    // bits  2-3 : side (0=Undefined, 1=Long, 2=Short)
+    // bits  2-3 : side (0=Undefined, 1=Buy, 2=Sell)
     // bit      4: IsSnapshot (for L2)
     // bits  5-31: reserved
 
@@ -32,10 +32,10 @@ public static class MarketDataFlags
     {
         int flags = 0;
 
-        // message type
+        // type
         flags |= ((int)type & 0b11) << TypeBits;
 
-        // side → 2 bits
+        // side
         int sideBits = side switch
         {
             Side.Buy => 0b01,
@@ -58,16 +58,8 @@ public static class MarketDataFlags
         out Side side,
         out bool isSnapshot)
     {
-        // type
-        var typeBits = (flags & TypeMask) >> TypeBits;
-        type = typeBits switch
-        {
-            0b00 => MarketDataMessageType.L2Update,
-            0b01 => MarketDataMessageType.Trade,
-            _ => MarketDataMessageType.L2Update // fallback / reserved
-        };
+        type = GetMessageType(flags);
 
-        // side
         var sideBits = (flags & SideMask) >> SideBits;
         side = sideBits switch
         {
@@ -76,7 +68,35 @@ public static class MarketDataFlags
             _ => Side.None
         };
 
-        // snapshot
         isSnapshot = (flags & SnapshotMask) != 0;
     }
+
+    /// <summary>
+    /// Returns the message type encoded in the flags (L2Update or Trade).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static MarketDataMessageType GetMessageType(int flags)
+    {
+        var typeBits = (flags & TypeMask) >> TypeBits;
+        return typeBits switch
+        {
+            0b00 => MarketDataMessageType.L2Update,
+            0b01 => MarketDataMessageType.Trade,
+            _ => MarketDataMessageType.L2Update // резерв, дефолтим в L2
+        };
+    }
+
+    /// <summary>
+    /// Returns true if the flags encode an L2 update message.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsL2Update(int flags)
+        => GetMessageType(flags) == MarketDataMessageType.L2Update;
+
+    /// <summary>
+    /// Returns true if the flags encode a trade message.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsTrade(int flags)
+        => GetMessageType(flags) == MarketDataMessageType.Trade;
 }
