@@ -20,30 +20,14 @@ public class MarketDataCacheAccessorTests
         CompressionType compression,
         CompressionLevel level)
     {
-        var ctor = typeof(MarketDataCacheAccessor).GetConstructor(
-            BindingFlags.Instance | BindingFlags.NonPublic,
-            binder: null,
-            types: new[] { typeof(string), typeof(MarketDataHash), typeof(CompressionType), typeof(CompressionLevel) },
-            modifiers: null);
-
-        ctor.ShouldNotBeNull("Writer constructor not found (signature (string, MarketDataHash, CompressionType, CompressionLevel))");
-
-        return (MarketDataCacheAccessor)ctor.Invoke(new object?[] { directory, hash, compression, level });
+        return new MarketDataCacheAccessor(directory, hash, compression, level);
     }
 
     private static MarketDataCacheAccessor CreateReader(
         string directory,
         MarketDataHash hash)
     {
-        var ctor = typeof(MarketDataCacheAccessor).GetConstructor(
-            BindingFlags.Instance | BindingFlags.NonPublic,
-            binder: null,
-            types: new[] { typeof(string), typeof(MarketDataHash) },
-            modifiers: null);
-
-        ctor.ShouldNotBeNull("Reader constructor not found (signature (string, MarketDataHash))");
-
-        return (MarketDataCacheAccessor)ctor.Invoke(new object?[] { directory, hash });
+        return new MarketDataCacheAccessor(directory, hash);
     }
 
     [Fact]
