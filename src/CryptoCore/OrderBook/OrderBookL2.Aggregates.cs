@@ -96,4 +96,72 @@ public sealed partial class OrderBookL2
     {
         // intentionally empty
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public unsafe int CopyTopBids(double* pxPtr, double* qtyPtr, int levels)
+    {
+        ArgumentNullException.ThrowIfNull(pxPtr);
+        ArgumentNullException.ThrowIfNull(qtyPtr);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(levels);
+
+        var i = 0;
+        using var e = _bidsSorted.GetEnumerator();
+        while (i < levels && e.MoveNext())
+        {
+            var kv = e.Current;
+            pxPtr[i] = kv.Key;
+            qtyPtr[i] = kv.Value;
+            i++;
+        }
+
+        return i;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public unsafe int CopyTopAsks(double* pxPtr, double* qtyPtr, int levels)
+    {
+        ArgumentNullException.ThrowIfNull(pxPtr);
+        ArgumentNullException.ThrowIfNull(qtyPtr);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(levels);
+
+        var i = 0;
+        using var e = _asksSorted.GetEnumerator();
+        while (i < levels && e.MoveNext())
+        {
+            var kv = e.Current;
+            pxPtr[i] = kv.Key;
+            qtyPtr[i] = kv.Value;
+            i++;
+        }
+
+        return i;
+    }
+
+    public unsafe int CopyTopBids(Span<double> prices, Span<double> qtys, int levels)
+    {
+        ArgumentOutOfRangeException.ThrowIfNotEqual(prices.Length, qtys.Length);
+        ArgumentOutOfRangeException.ThrowIfNotEqual(prices.Length, levels);
+
+        fixed (double* pxPtr = prices)
+        {
+            fixed (double* qtyPtr = qtys)
+            {
+                return CopyTopBids(pxPtr, qtyPtr, levels);
+            }
+        }
+    }
+
+    public unsafe int CopyTopAsks(Span<double> prices, Span<double> qtys, int levels)
+    {
+        ArgumentOutOfRangeException.ThrowIfNotEqual(prices.Length, qtys.Length);
+        ArgumentOutOfRangeException.ThrowIfNotEqual(prices.Length, levels);
+
+        fixed (double* pxPtr = prices)
+        {
+            fixed (double* qtyPtr = qtys)
+            {
+                return CopyTopAsks(pxPtr, qtyPtr, levels);
+            }
+        }
+    }
 }
