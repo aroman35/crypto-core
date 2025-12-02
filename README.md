@@ -259,7 +259,6 @@ reversal
 
 ## 9. License
 
-MIT (recommended)
+MIT
 
 ---
-
