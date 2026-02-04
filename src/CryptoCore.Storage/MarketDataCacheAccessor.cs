@@ -1,5 +1,7 @@
-﻿using System.IO.Compression;
+﻿using System;
+using System.IO.Compression;
 using System.IO.MemoryMappedFiles;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using CryptoCore.Storage.Extensions;
@@ -11,10 +13,18 @@ namespace CryptoCore.Storage;
 
 /// <summary>
 /// Streaming reader/writer for market data cache files in the unified format:
-/// [MarketDataCacheMeta (uncompressed)] + [sequence of PackedMarketData24 (optionally compressed)].
+/// [MarketDataCacheMeta (uncompressed)] + [sequence of T (optionally compressed)].
 /// </summary>
-public sealed unsafe class MarketDataCacheAccessor : IDisposable
+public sealed unsafe class MarketDataCacheAccessor<T> : IDisposable
+    where T : unmanaged
 {
+    private static readonly TypeMetadata _metadata = ResolveMetadata();
+
+    static MarketDataCacheAccessor()
+    {
+        ValidateType();
+    }
+
     private readonly FileStream? _sourceFileStream;
     private readonly bool _isReader;
     private readonly bool _isEmpty;
@@ -46,12 +56,12 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
     public bool IsEmpty => _isEmpty;
 
     /// <summary>
-    /// Number of <see cref="PackedMarketData24"/> records stored in the file.
+    /// Number of <see cref="T"/> records stored in the file.
     /// </summary>
     public long ItemsCount => _itemsCount;
 
     private static int MetaSize => sizeof(MarketDataCacheMeta);
-    private static int ItemSize => sizeof(PackedMarketData24);
+    private static int ItemSize => sizeof(T);
 
     #region Constructors
 
@@ -67,6 +77,13 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
         CompressionLevel compressionLevel)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+
+        var expectedFeed = _metadata.FeedType;
+        if (hash.Feed is not FeedType.Unknown && hash.Feed != expectedFeed)
+            throw new ArgumentException(
+                $"Hash feed mismatch. Expected {expectedFeed}, got {hash.Feed}.");
+
+        hash = new MarketDataHash(hash.Symbol, hash.Date, expectedFeed);
 
         _isReader = false;
         Hash = hash;
@@ -105,7 +122,7 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
             compressionLevel,
             itemsCount: 0,
             buildTimeUtc: DateTime.UtcNow,
-            version: Version.Create(1, 0, 0));
+            version: _metadata.Version);
     }
 
     /// <summary>
@@ -115,6 +132,13 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
     public MarketDataCacheAccessor(string? directory, MarketDataHash hash)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+
+        var expectedFeed = _metadata.FeedType;
+        if (hash.Feed is not FeedType.Unknown && hash.Feed != expectedFeed)
+            throw new ArgumentException(
+                $"Hash feed mismatch. Expected {expectedFeed}, got {hash.Feed}.");
+
+        hash = new MarketDataHash(hash.Symbol, hash.Date, expectedFeed);
 
         _isReader = true;
         Hash = hash;
@@ -143,6 +167,14 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
             throw new ArgumentException(
                 $"Invalid market data file. Expected {hash}, found {Meta.Hash}.");
 
+        if (Meta.Hash.Feed != expectedFeed)
+            throw new ArgumentException(
+                $"Invalid market data file. Expected feed {expectedFeed}, found {Meta.Hash.Feed}.");
+
+        if (!Meta.Version.IsCompatible(_metadata.Version))
+            throw new ArgumentException(
+                $"Incompatible market data version. Expected {_metadata.Version}, found {Meta.Version}.");
+
         _itemsCount = Meta.ItemsCount;
         _isEmpty = _itemsCount == 0;
 
@@ -154,12 +186,12 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
     #region Write API
 
     /// <summary>
-    /// Writes a single packed market data record to the underlying stream.
+    /// Writes a single market data record to the underlying stream.
     /// </summary>
     /// <param name="item">Packed record to write.</param>
-    public void Write(PackedMarketData24 item)
+    public void Write(T item)
     {
-        ObjectDisposedException.ThrowIf(_disposed, nameof(MarketDataCacheAccessor));
+        ObjectDisposedException.ThrowIf(_disposed, nameof(MarketDataCacheAccessor<T>));
 
         if (_isReader)
             throw new InvalidOperationException("Cannot write using a reader instance.");
@@ -167,7 +199,35 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
         ObjectDisposedException.ThrowIf(_compressionStream is null, typeof(Stream));
 
         WriteInternal(_compressionStream, item);
-        _itemsCount++;
+        checked
+        {
+            _itemsCount++;
+        }
+    }
+
+    /// <summary>
+    /// Writes a batch of market data records to the underlying stream.
+    /// </summary>
+    /// <param name="items">Records to write.</param>
+    public void Write(ReadOnlySpan<T> items)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, nameof(MarketDataCacheAccessor<T>));
+
+        if (_isReader)
+            throw new InvalidOperationException("Cannot write using a reader instance.");
+
+        if (items.IsEmpty)
+            return;
+
+        ObjectDisposedException.ThrowIf(_compressionStream is null, typeof(Stream));
+
+        var bytes = MemoryMarshal.AsBytes(items);
+        _compressionStream.Write(bytes);
+
+        checked
+        {
+            _itemsCount += items.Length;
+        }
     }
 
     #endregion
@@ -178,37 +238,80 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
     /// Reads all records sequentially from the beginning (or current position)
     /// until the end of the file.
     /// </summary>
-    /// <returns>Sequence of <see cref="PackedMarketData24"/> records.</returns>
-    public IEnumerable<PackedMarketData24> ReadAll()
+    /// <returns>Sequence of <see cref="T"/> records.</returns>
+    public IEnumerable<T> ReadAll()
     {
-        ObjectDisposedException.ThrowIf(_disposed, nameof(MarketDataCacheAccessor));
+        ObjectDisposedException.ThrowIf(_disposed, nameof(MarketDataCacheAccessor<T>));
 
         if (_isEmpty)
             yield break;
 
-        // MMF-оптимизированный путь только для NoCompression
+        while (TryReadNext(out var item))
+            yield return item;
+    }
+
+    /// <summary>
+    /// Reads up to <paramref name="destination"/> length items into the provided buffer.
+    /// </summary>
+    /// <param name="destination">Destination buffer.</param>
+    /// <returns>Number of items read.</returns>
+    public int Read(Span<T> destination)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, nameof(MarketDataCacheAccessor<T>));
+
+        if (!_isReader)
+            throw new InvalidOperationException("Cannot read using a writer instance.");
+
+        if (_isEmpty || destination.IsEmpty)
+            return 0;
+
+        var remaining = _itemsCount - _readerPosition;
+        if (remaining <= 0)
+            return 0;
+
+        var toRead = (int)Math.Min(remaining, destination.Length);
+        if (toRead <= 0)
+            return 0;
+
+        var slice = destination[..toRead];
+
         if (_isReader &&
             Meta.CompressionType == CompressionType.NoCompression &&
             _mmfAccessor is not null &&
             _mmfPointerAcquired)
         {
-            while (TryReadNextMmf(out var item))
-            {
-                yield return item;
-            }
-
-            yield break;
+            return ReadFromMmf(slice);
         }
 
-        // Стриминговый путь (gzip/brotli/deflate/lz4)
-        while (_readerPosition < _itemsCount)
+        return ReadFromStream(slice);
+    }
+
+    /// <summary>
+    /// Reads a single item from the current position.
+    /// </summary>
+    /// <param name="item">Read item.</param>
+    /// <returns>True if item was read; false if at end.</returns>
+    public bool TryReadNext(out T item)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, nameof(MarketDataCacheAccessor<T>));
+
+        if (!_isReader)
+            throw new InvalidOperationException("Cannot read using a writer instance.");
+
+        item = default;
+
+        if (_isEmpty || _readerPosition >= _itemsCount)
+            return false;
+
+        if (_isReader &&
+            Meta.CompressionType == CompressionType.NoCompression &&
+            _mmfAccessor is not null &&
+            _mmfPointerAcquired)
         {
-            if (!ReadSingleItem<PackedMarketData24>(_compressionStream!, out var item))
-                yield break;
-
-            _readerPosition++;
-            yield return item;
+            return TryReadNextMmf(out item);
         }
+
+        return TryReadNextStream(out item);
     }
 
     /// <summary>
@@ -217,7 +320,7 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
     /// </summary>
     public void ResetReader()
     {
-        ObjectDisposedException.ThrowIf(_disposed, nameof(MarketDataCacheAccessor));
+        ObjectDisposedException.ThrowIf(_disposed, nameof(MarketDataCacheAccessor<T>));
 
         if (!_isReader)
             throw new InvalidOperationException("ResetReader is only valid for reader instances.");
@@ -228,7 +331,14 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
         // Для NoCompression используем MMF, для остальных – обычный Stream + декомпрессор.
         if (Meta.CompressionType == CompressionType.NoCompression)
         {
-            ResetMmfReader();
+            if (ResetMmfReader())
+            {
+                _readerPosition = 0;
+                return;
+            }
+
+            _sourceFileStream.Seek(MetaSize, SeekOrigin.Begin);
+            _compressionStream = _sourceFileStream;
             _readerPosition = 0;
             return;
         }
@@ -253,9 +363,9 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
     }
 
     /// <summary>
-    /// Инициализирует MemoryMappedFile для чтения массива PackedMarketData24 при NoCompression.
+    /// Инициализирует MemoryMappedFile для чтения массива T при NoCompression.
     /// </summary>
-    private void ResetMmfReader()
+    private bool ResetMmfReader()
     {
         if (_sourceFileStream is null)
             throw new InvalidOperationException("Source stream is null for MMF reader.");
@@ -263,38 +373,48 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
         // Освобождаем предыдущий MMF, если был
         ReleaseMmf();
 
-        // Создаём MMF поверх существующего файлового потока
-        _mmf = MemoryMappedFile.CreateFromFile(
-            _sourceFileStream,
-            mapName: null,
-            capacity: 0,
-            access: MemoryMappedFileAccess.Read,
-            inheritability: HandleInheritability.None,
-            leaveOpen: true);
+        try
+        {
+            // Создаём MMF поверх существующего файлового потока
+            _mmf = MemoryMappedFile.CreateFromFile(
+                _sourceFileStream,
+                mapName: null,
+                capacity: 0,
+                access: MemoryMappedFileAccess.Read,
+                inheritability: HandleInheritability.None,
+                leaveOpen: true);
 
-        var dataOffset = (long)MetaSize;
-        var dataLength = _itemsCount <= 0
-            ? 0
-            : checked((long)_itemsCount * ItemSize);
+            var dataOffset = (long)MetaSize;
+            var dataLength = _itemsCount <= 0
+                ? 0
+                : checked((long)_itemsCount * ItemSize);
 
-        _mmfAccessor = _mmf.CreateViewAccessor(
-            offset: dataOffset,
-            size: dataLength,
-            access: MemoryMappedFileAccess.Read);
+            _mmfAccessor = _mmf.CreateViewAccessor(
+                offset: dataOffset,
+                size: dataLength,
+                access: MemoryMappedFileAccess.Read);
 
-        // Получаем базовый указатель на окно
-        var handle = _mmfAccessor.SafeMemoryMappedViewHandle;
+            // Получаем базовый указатель на окно
+            var handle = _mmfAccessor.SafeMemoryMappedViewHandle;
 
-        byte* ptr = null;
-        handle.AcquirePointer(ref ptr);
-        _mmfPointerAcquired = true;
+            byte* ptr = null;
+            handle.AcquirePointer(ref ptr);
+            _mmfPointerAcquired = true;
 
-        // PointerOffset учитывает смещение, с которым открыт view
-        _mmfBasePtr = ptr + _mmfAccessor.PointerOffset;
+            // PointerOffset учитывает смещение, с которым открыт view
+            _mmfBasePtr = ptr + _mmfAccessor.PointerOffset;
 
-        // Поток декомпрессии нам не нужен в режиме MMF
-        _compressionStream?.Dispose();
-        _compressionStream = null;
+            // Поток декомпрессии нам не нужен в режиме MMF
+            _compressionStream?.Dispose();
+            _compressionStream = null;
+
+            return true;
+        }
+        catch
+        {
+            ReleaseMmf();
+            return false;
+        }
     }
 
     #endregion
@@ -302,20 +422,20 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
     #region Low-level IO helpers
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void WriteInternal<T>(Stream stream, T data)
-        where T : unmanaged
+    private static void WriteInternal<TItem>(Stream stream, TItem data)
+        where TItem : unmanaged
     {
-        var size = sizeof(T);
+        var size = sizeof(TItem);
         Span<byte> buffer = stackalloc byte[size];
         MemoryMarshal.Write(buffer, in data);
         stream.Write(buffer);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool ReadSingleItem<T>(Stream stream, out T data)
-        where T : unmanaged
+    private static bool ReadSingleItem<TItem>(Stream stream, out TItem data)
+        where TItem : unmanaged
     {
-        var size = sizeof(T);
+        var size = sizeof(TItem);
         Span<byte> buffer = stackalloc byte[size];
         data = default;
 
@@ -331,7 +451,7 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
             read += extra;
         }
 
-        data = MemoryMarshal.Read<T>(buffer);
+        data = MemoryMarshal.Read<TItem>(buffer);
         return true;
     }
 
@@ -407,7 +527,7 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
                 _compressionStream.Dispose();
 
             // On writer: finalize header with actual ItemsCount
-            if (!_isReader && !_isEmpty && _sourceFileStream is not null)
+            if (!_isReader && _sourceFileStream is not null)
             {
                 WriteMeta();
             }
@@ -423,7 +543,7 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
     #endregion
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool TryReadNextMmf(out PackedMarketData24 item)
+    private bool TryReadNextMmf(out T item)
     {
         item = default;
 
@@ -434,10 +554,123 @@ public sealed unsafe class MarketDataCacheAccessor : IDisposable
             return false;
 
         var offsetBytes = _readerPosition * ItemSize;
-        var itemPtr = (PackedMarketData24*)(_mmfBasePtr + offsetBytes);
+        var itemPtr = (T*)(_mmfBasePtr + offsetBytes);
 
         item = *itemPtr;
         _readerPosition++;
         return true;
+    }
+
+    private bool TryReadNextStream(out T item)
+    {
+        item = default;
+
+        ObjectDisposedException.ThrowIf(_compressionStream is null, typeof(Stream));
+
+        if (!ReadSingleItem<T>(_compressionStream, out item))
+            return false;
+
+        _readerPosition++;
+        return true;
+    }
+
+    private int ReadFromStream(Span<T> destination)
+    {
+        ObjectDisposedException.ThrowIf(_compressionStream is null, typeof(Stream));
+
+        var bytes = MemoryMarshal.AsBytes(destination);
+        var totalRead = 0;
+
+        while (totalRead < bytes.Length)
+        {
+            var read = _compressionStream.Read(bytes[totalRead..]);
+            if (read == 0)
+                break;
+            totalRead += read;
+        }
+
+        if (totalRead == 0)
+            return 0;
+
+        if (totalRead % ItemSize != 0)
+            throw new InvalidOperationException("Unexpected end of stream while reading market data.");
+
+        var itemsRead = totalRead / ItemSize;
+        _readerPosition += itemsRead;
+        return itemsRead;
+    }
+
+    private int ReadFromMmf(Span<T> destination)
+    {
+        var remaining = _itemsCount - _readerPosition;
+        if (remaining <= 0)
+            return 0;
+
+        var toRead = (int)Math.Min(remaining, destination.Length);
+        if (toRead <= 0)
+            return 0;
+
+        var offsetBytes = _readerPosition * ItemSize;
+        var bytesToCopy = (long)toRead * ItemSize;
+
+        fixed (T* destPtr = destination)
+        {
+            Buffer.MemoryCopy(
+                _mmfBasePtr + offsetBytes,
+                destPtr,
+                (long)destination.Length * ItemSize,
+                bytesToCopy);
+        }
+
+        _readerPosition += toRead;
+        return toRead;
+    }
+
+    private static TypeMetadata ResolveMetadata()
+    {
+        var attr = typeof(T).GetCustomAttribute<FeedTypeAttribute>();
+        if (attr is null)
+            throw new InvalidOperationException(
+                $"Missing {nameof(FeedTypeAttribute)} on type '{typeof(T).Name}'.");
+
+        if (attr.FeedType is FeedType.Unknown)
+            throw new InvalidOperationException(
+                $"{nameof(FeedTypeAttribute)} on '{typeof(T).Name}' cannot be {FeedType.Unknown}.");
+
+        return new TypeMetadata(attr.FeedType, attr.Version);
+    }
+
+    private static void ValidateType()
+    {
+        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+            throw new InvalidOperationException(
+                $"Type '{typeof(T).Name}' must not contain reference fields.");
+
+        var layout = typeof(T).StructLayoutAttribute;
+        if (layout is null ||
+            (layout.Value != LayoutKind.Sequential && layout.Value != LayoutKind.Explicit))
+        {
+            throw new InvalidOperationException(
+                $"Type '{typeof(T).Name}' must use {nameof(StructLayoutAttribute)} with sequential or explicit layout.");
+        }
+
+        if (layout.Value == LayoutKind.Sequential && layout.Pack != 1)
+        {
+            throw new InvalidOperationException(
+                $"Type '{typeof(T).Name}' must specify [StructLayout(LayoutKind.Sequential, Pack = 1)].");
+        }
+    }
+
+    private readonly struct TypeMetadata
+    {
+        public TypeMetadata(FeedType feedType, Version version)
+        {
+            FeedType = feedType;
+            Version = version;
+        }
+
+        public FeedType FeedType { get; }
+
+        public Version Version { get; }
     }
 }

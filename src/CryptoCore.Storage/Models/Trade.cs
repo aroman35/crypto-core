@@ -1,5 +1,7 @@
-﻿using CryptoCore.Primitives;
+﻿using System.Runtime.InteropServices;
+using CryptoCore.Primitives;
 using CryptoCore.Storage.Extensions;
+using CryptoCore.Storage.Models.Enums;
 
 namespace CryptoCore.Storage.Models;
 
@@ -7,6 +9,8 @@ namespace CryptoCore.Storage.Models;
 /// Domain-level representation of a single trade print.
 /// Timestamp is assumed to be in UTC.
 /// </summary>
+[FeedType(FeedType.Trades, 1, 0, 0)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 public readonly record struct Trade(
     DateTimeOffset Timestamp,
     Side Side,

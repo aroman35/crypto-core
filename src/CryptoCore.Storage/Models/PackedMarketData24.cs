@@ -9,6 +9,7 @@ namespace CryptoCore.Storage.Models;
 /// The struct is exactly 24 bytes in size and is designed for
 /// efficient binary storage and sequential streaming.
 /// </summary>
+[FeedType(FeedType.Combined, 1, 0, 0)]
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public readonly struct PackedMarketData24(int timeMs, Decimal9 price, Decimal9 quantity, int flags)
 {

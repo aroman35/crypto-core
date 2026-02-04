@@ -103,7 +103,7 @@ public sealed class MarketDataCacheReplayer : IDisposable
     /// <param name="cancellationToken">Cancellation token to stop the replay.</param>
     public void Run(CancellationToken cancellationToken = default)
     {
-        using var accessor = new MarketDataCacheAccessor(_rootDir, _hash);
+        using var accessor = new MarketDataCacheAccessor<PackedMarketData24>(_rootDir, _hash);
 
         foreach (var packed in accessor.ReadAll())
         {

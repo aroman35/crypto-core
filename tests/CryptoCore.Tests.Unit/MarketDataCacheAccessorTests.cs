@@ -1,33 +1,33 @@
 ﻿using System.IO.Compression;
-using System.Reflection;
 using CryptoCore.Primitives;
 using CryptoCore.Storage;
 using CryptoCore.Storage.Extensions;
 using CryptoCore.Storage.Models;
 using CryptoCore.Storage.Models.Enums;
 using Shouldly;
+using StorageVersion = CryptoCore.Storage.Models.Version;
 
 namespace CryptoCore.Tests.Unit;
 
 /// <summary>
-/// End-to-end tests for MarketDataCacheAccessor (write + read).
+/// End-to-end tests for MarketDataCacheAccessor<PackedMarketData24> (write + read).
 /// </summary>
 public class MarketDataCacheAccessorTests
 {
-    private static MarketDataCacheAccessor CreateWriter(
+    private static MarketDataCacheAccessor<PackedMarketData24> CreateWriter(
         string directory,
         MarketDataHash hash,
         CompressionType compression,
         CompressionLevel level)
     {
-        return new MarketDataCacheAccessor(directory, hash, compression, level);
+        return new MarketDataCacheAccessor<PackedMarketData24>(directory, hash, compression, level);
     }
 
-    private static MarketDataCacheAccessor CreateReader(
+    private static MarketDataCacheAccessor<PackedMarketData24> CreateReader(
         string directory,
         MarketDataHash hash)
     {
-        return new MarketDataCacheAccessor(directory, hash);
+        return new MarketDataCacheAccessor<PackedMarketData24>(directory, hash);
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class MarketDataCacheAccessorTests
 
         Symbol symbol = default;
         var date = new DateOnly(2025, 1, 1);
-        var hash = new MarketDataHash(symbol, date, FeedType.Trades);
+        var hash = new MarketDataHash(symbol, date, FeedType.Combined);
 
         // Prepare some domain events
         var tradeTs = new DateTimeOffset(2025, 1, 1, 12, 0, 0, TimeSpan.Zero);
@@ -65,6 +65,7 @@ public class MarketDataCacheAccessorTests
         reader.Meta.Hash.ShouldBe(hash);
         reader.Meta.ItemsCount.ShouldBe(2);
         reader.Meta.CompressionType.ShouldBe(CompressionType.GZip);
+        reader.Meta.Version.ShouldBe(StorageVersion.Create(1, 0, 0));
 
         var all = reader.ReadAll().ToArray();
         all.Length.ShouldBe(2);
@@ -84,7 +85,7 @@ public class MarketDataCacheAccessorTests
 
         Symbol symbol = default;
         var date = new DateOnly(2025, 2, 1);
-        var hash = new MarketDataHash(symbol, date, FeedType.Trades);
+        var hash = new MarketDataHash(symbol, date, FeedType.Combined);
 
         // Сразу создаём reader, файла ещё нет => IsEmpty = true
         using var reader = CreateReader(tmpRoot, hash);

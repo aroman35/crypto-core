@@ -1,233 +1,153 @@
+﻿# CryptoCore.Storage Documentation
 
-# CryptoCore.Storage — Documentation
+## Overview
+CryptoCore.Storage provides a binary, high-throughput format for archived market data. The storage layer is optimized for:
 
-## 1. Overview
-`CryptoCore.Storage` is a high‑performance archival storage engine for level‑2 market data (LOB snapshots and deltas) and trades.  
-It is optimized for:
+- Compact, deterministic records
+- Fast sequential reads/writes
+- Efficient replay for analytics and backtesting
 
-- High‑frequency research  
-- Order‑book reconstruction  
-- Backtesting and simulation  
-- Efficient storage of large Tardis/exchange archives  
-- Fast replay for analytics pipelines
+The system stores a small, fixed-width struct per record (typically `PackedMarketData24`) followed by optional compression.
 
-The core of the system is a compact 24‑byte record (`PackedMarketData24`) containing:
+## File Format
+Each file is a single stream:
 
-- timestamp  
-- price  
-- quantity  
-- message flags  
+```
+[MarketDataCacheMeta (uncompressed)] + [sequence of T (optionally compressed)]
+```
 
-This allows for extremely high compression, I/O efficiency, and predictable performance.
+- `MarketDataCacheMeta` is written at the start of the file in raw binary form.
+- The data section is a contiguous sequence of `T` records.
+- Compression is applied only to the data section.
 
----
+## Core Concepts
 
-## 2. Core Types
+### MarketDataHash
+`MarketDataHash` defines file identity (Symbol, Date, Feed). It also controls the on-disk file path.
 
-### 2.1 `PackedMarketData24`
-A fixed‑width 24‑byte struct:
+### FeedTypeAttribute
+All storage record types must be annotated with `FeedTypeAttribute`. The attribute defines:
 
-| Field | Type | Description |
-|------|------|-------------|
-| `TimeMs`   | `int`       | Milliseconds from start of day (UTC) |
-| `Price`    | `Decimal9`  | 9‑decimal fixed‑precision price      |
-| `Quantity` | `Decimal9`  | 9‑decimal fixed‑precision quantity   |
-| `Flags`    | `int`       | Encodes message type + metadata     |
-
----
-
-### 2.2 `MarketDataFlags`
-Bit‑packed flags:
-
-- bits 0–1 → message type (`L2Update` or `Trade`)
-- bits 2–3 → side (`Buy`, `Sell`)
-- bit 4   → snapshot flag  
-- bits 5–31 reserved  
+- `FeedType` (used for file naming and validation)
+- `Version` (used for compatibility checks)
 
 Example:
+
 ```csharp
-int flags = MarketDataFlags.Pack(
-    MarketDataMessageType.L2Update,
-    Side.Buy,
-    false
-);
+[FeedType(FeedType.Combined, 1, 0, 0)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public readonly struct PackedMarketData24 { ... }
 ```
 
----
+### Versioning
+`MarketDataCacheAccessor<T>` validates format compatibility using `CryptoCore.Storage.Models.Version`:
 
-### 2.3 `LevelUpdate`
-Domain L2 event with:
+- The file header stores `Meta.Version` (from the `FeedTypeAttribute`).
+- On read, the accessor checks `Meta.Version.IsCompatible(attributeVersion)`.
+- Compatibility is defined as matching Major and Minor.
 
-- UTC timestamp  
-- price  
-- quantity  
-- side  
-- snapshot flag  
+## MarketDataCacheAccessor<T>
+A generic streaming reader/writer for binary cache files.
 
-Decoded from storage via:
+### Type Requirements
+`T` must satisfy:
 
+- `unmanaged`
+- No reference fields (`RuntimeHelpers.IsReferenceOrContainsReferences<T>() == false`)
+- `[StructLayout(LayoutKind.Sequential, Pack = 1)]` or explicit layout
+- `[FeedType(...)]` attribute with non-`Unknown` feed and a version
+
+### Constructors
+- Writer:
+  ```csharp
+  var writer = new MarketDataCacheAccessor<T>(directory, hash, compressionType, compressionLevel);
+  ```
+
+- Reader:
+  ```csharp
+  var reader = new MarketDataCacheAccessor<T>(directory, hash);
+  ```
+
+If `hash.Feed` is `Unknown`, it is set to the feed from `FeedTypeAttribute`.
+If `hash.Feed` is specified and does not match the attribute, an exception is thrown.
+
+### Write API
+- `Write(T item)`
+- `Write(ReadOnlySpan<T> items)`
+
+### Read API
+- `IEnumerable<T> ReadAll()`
+- `bool TryReadNext(out T item)`
+- `int Read(Span<T> destination)`
+- `ResetReader()`
+
+### NoCompression + Memory Mapping
+When `CompressionType.NoCompression` is used, the reader attempts to use a memory-mapped view for fast access. If MMF setup fails, it transparently falls back to streaming reads.
+
+## Usage Examples
+
+### PackedMarketData24 (combined feed)
 ```csharp
-var l2 = packed.ToLevelUpdate(date);
-```
+var hash = new MarketDataHash(symbol, date, FeedType.Combined);
 
----
-
-### 2.4 `Trade`
-Domain trade print:
-
-```csharp
-var trade = packed.ToTrade(date);
-```
-
----
-
-### 2.5 StorageExtensions
-Encoding/decoding helpers:
-
-- `LevelUpdate → PackedMarketData24`
-- `Trade → PackedMarketData24`
-- Plus reverse conversion
-
-Example:
-```csharp
-PackedMarketData24 p = update.ToStorage();
-LevelUpdate u = p.ToLevelUpdate(date);
-```
-
----
-
-## 3. MarketDataCacheReplayer
-
-Reconstructs L2 book + dispatches events to `IMarketDataListener`.
-
-Capabilities:
-
-- Sequential parse of packed data  
-- Aggregation into 100 ms windows  
-- Full book reconstruction via `OrderBookL2`  
-- Delivers:
-  - `QuoteBatchReceived`
-  - `OrderBookUpdated`
-  - `TopUpdated`
-  - `TradeReceived`  
-
-Designed for fast offline analytics.
-
-Usage:
-
-```csharp
-var replayer = new MarketDataCacheReplayer(root, hash, listener);
-replayer.Run();
-```
-
----
-
-## 4. Performance Metrics
-
-Measurements from real BTC/USDT data.
-
-### 4.1 Replay (L2 reconstruction)
-
-| Mode | Throughput |
-|------|------------|
-| Replay + OrderBookL2 | **31–34 sec** for 86k events |
-| Replay + Features | **52 sec** |
-| Replay only | **14–17 sec** |
-
-### 4.2 Writing performance
-
-| Operation | Speed |
-|----------|--------|
-| Raw .cache write | 300–450 MB/s |
-| LZ4 block compression | 650–850 MB/s |
-| Decimal9 encode | 2.5–3 ns |
-
-### 4.3 Reading performance (from CSV files)
-
-| Method | Speed |
-|--------|--------|
-| Sequential read | 2.2–2.8 GB/s |
-| Memory‑mapped read | 3.0–3.3 GB/s |
-| LZ4 decode | 1.0–1.4 GB/s |
-
-Data sources: `read_metrics.csv`, `read_metrics_mmf.csv`, `lz4_metrics.csv`.
-
----
-
-## 5. Usage Examples
-
-### 5.1 Writing data
-
-```csharp
-using var fs = File.OpenWrite("btc.cache");
-using var bw = new BinaryWriter(fs);
-
-foreach (var update in updates)
+using (var writer = new MarketDataCacheAccessor<PackedMarketData24>(root, hash, CompressionType.GZip, CompressionLevel.Fastest))
 {
-    var packed = update.ToStorage();
-    packed.WriteTo(bw); // 24 bytes
+    writer.Write(packedRecord);
 }
-```
 
-### 5.2 Reading data
-
-```csharp
-using var accessor = new MarketDataCacheAccessor(root, hash);
-
-foreach (var packed in accessor.ReadAll())
+using var reader = new MarketDataCacheAccessor<PackedMarketData24>(root, hash);
+foreach (var packed in reader.ReadAll())
 {
     if (packed.IsTrade())
-        Process(packed.ToTrade(hash.Date));
+        ProcessTrade(packed.ToTrade(hash.Date));
     else
-        Process(packed.ToLevelUpdate(hash.Date));
+        ProcessUpdate(packed.ToLevelUpdate(hash.Date));
 }
 ```
 
-### 5.3 Full replay pipeline
+### Trade feed
+```csharp
+var hash = new MarketDataHash(symbol, date, FeedType.Trades);
+
+using (var writer = new MarketDataCacheAccessor<Trade>(root, hash, CompressionType.Lz4, CompressionLevel.Fastest))
+{
+    writer.Write(tradesSpan);
+}
+
+using var reader = new MarketDataCacheAccessor<Trade>(root, hash);
+var buffer = new Trade[1024];
+while (true)
+{
+    var read = reader.Read(buffer);
+    if (read == 0)
+        break;
+
+    for (var i = 0; i < read; i++)
+        ProcessTrade(buffer[i]);
+}
+```
+
+### LevelUpdate feed
+```csharp
+var hash = new MarketDataHash(symbol, date, FeedType.LevelUpdates);
+
+using var reader = new MarketDataCacheAccessor<LevelUpdate>(root, hash);
+while (reader.TryReadNext(out var update))
+    ProcessUpdate(update);
+```
+
+## MarketDataCacheReplayer
+`MarketDataCacheReplayer` replays packed data into an `OrderBookL2` and forwards events to `IMarketDataListener`.
 
 ```csharp
-IMarketDataListener listener =
-    new QuoteFlowListener(5000, depthLevels: 16);
-
-var replayer = new MarketDataCacheReplayer(
-    rootDir,
-    hash,
-    listener,
-    rateMs: 100
-);
-
+var replayer = new MarketDataCacheReplayer(root, hash, listener, rateMs: 100);
 replayer.Run();
 ```
 
-### 5.4 Multi‑day processing
+## Operational Notes
+- File paths are derived from `MarketDataHash` and `FeedType`.
+- Version incompatibility or feed mismatch results in a clear exception on read.
+- For best performance, use `Write(ReadOnlySpan<T>)` and `Read(Span<T>)` in batch mode.
 
-```csharp
-foreach (var date in dates)
-{
-    var hash = new MarketDataHash(symbol, date, FeedType.Combined);
-    var r = new MarketDataCacheReplayer(root, hash, listener);
-    r.Run();
-}
-```
-
----
-
-## 6. Summary
-
-`CryptoCore.Storage` delivers:
-
-- **Compact & deterministic** storage format (24 bytes)
-- **High I/O throughput**
-- **Fast L2 book reconstruction**
-- **Bounded‑latency replay**
-- **Unified interface for trades and quotes**
-- **Seamless integration with analytics**
-
-It forms the storage backbone for:
-
-- econometric modeling  
-- feature engineering  
-- latent trend extraction  
-- backtesting  
-- real‑time trading research  
-
+## Performance (Indicative)
+Performance depends on hardware, compression, and record size. The format is designed for fast sequential I/O, and memory-mapped reads are used for uncompressed files when available.
